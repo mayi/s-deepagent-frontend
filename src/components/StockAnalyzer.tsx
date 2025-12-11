@@ -33,8 +33,6 @@ interface StockSearchResult {
   name: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
 export default function StockAnalyzer() {
   const { token } = useAuth();
   const [stockCode, setStockCode] = useState('');
@@ -73,7 +71,7 @@ export default function StockAnalyzer() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/stock/search?keyword=${encodeURIComponent(keyword)}&limit=10`);
+      const response = await fetch(`/api/stock/search?keyword=${encodeURIComponent(keyword)}&limit=10`);
       const data = await response.json();
       
       if (data.success && data.stocks) {
@@ -106,7 +104,7 @@ export default function StockAnalyzer() {
 
     setIsValidating(true);
     try {
-      const response = await fetch(`${API_BASE}/api/stock/validate?stock_code=${encodeURIComponent(code)}`);
+      const response = await fetch(`/api/stock/validate?code=${encodeURIComponent(code)}`);
       const data: StockValidation = await response.json();
       setValidation(data);
     } catch (error) {
@@ -174,7 +172,7 @@ export default function StockAnalyzer() {
     if (!validation) {
       await validateStock(stockCode);
       // 获取最新验证结果
-      const response = await fetch(`${API_BASE}/api/stock/validate?stock_code=${encodeURIComponent(stockCode)}`);
+      const response = await fetch(`/api/stock/validate?code=${encodeURIComponent(stockCode)}`);
       const validationResult: StockValidation = await response.json();
       if (!validationResult.valid) {
         setValidation(validationResult);
@@ -195,20 +193,18 @@ export default function StockAnalyzer() {
     }
 
     // Create new EventSource connection with auth token
-    const url = new URL(`${API_BASE}/api/analyze`);
-    url.searchParams.set('stock_code', stockCode);
     
     // 注意: EventSource 不支持自定义headers，所以我们使用fetch + SSE
     // 对于需要认证的场景，使用fetch streaming
     try {
-      const headers: HeadersInit = {
-        'Accept': 'text/event-stream',
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(url.toString(), { headers });
+      const response = await fetch(`/api/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        body: JSON.stringify({ stock_code: stockCode }),
+      });
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 

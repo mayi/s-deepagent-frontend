@@ -20,8 +20,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -48,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const validateToken = async (authToken: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE}/api/auth/me`, {
+      const response = await fetch(`/api/auth/me`, {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
@@ -61,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE}/api/auth/login`, {
+      const response = await fetch(`/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -87,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE}/api/auth/register`, {
+      const response = await fetch(`/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -109,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     if (token) {
-      fetch(`${API_BASE}/api/auth/logout`, {
+      fetch(`/api/auth/logout`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -125,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const forgotPassword = async (email: string) => {
     try {
-      const response = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+      const response = await fetch(`/api/auth/forgot-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -146,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = async (resetToken: string, newPassword: string) => {
     try {
-      const response = await fetch(`${API_BASE}/api/auth/reset-password`, {
+      const response = await fetch(`/api/auth/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
