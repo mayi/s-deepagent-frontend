@@ -25,7 +25,7 @@ if (-not $version) {
     }
 }
 
-$imageName = "r.ichinginsight.top/s-deepagent-website:$version"
+$imageName = "swr.cn-north-4.myhuaweicloud.com/s-deepagent/s-deepagent-website:$version"
 
 Write-Host "Building image: $imageName"
 podman build -t $imageName .
