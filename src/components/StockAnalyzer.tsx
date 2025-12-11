@@ -197,13 +197,15 @@ export default function StockAnalyzer() {
     // 注意: EventSource 不支持自定义headers，所以我们使用fetch + SSE
     // 对于需要认证的场景，使用fetch streaming
     try {
-      const response = await fetch(`/api/analyze`, {
-        method: 'POST',
+      const url = new URL('/api/analyze', window.location.origin);
+      url.searchParams.set('stock_code', stockCode);
+      
+      const response = await fetch(url.toString(), {
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
           ...(token && { 'Authorization': `Bearer ${token}` }),
         },
-        body: JSON.stringify({ stock_code: stockCode }),
       });
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();

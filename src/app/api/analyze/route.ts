@@ -2,10 +2,10 @@ import { NextRequest } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { stock_code } = body;
+    const { searchParams } = request.nextUrl;
+    const stock_code = searchParams.get('stock_code');
 
     if (!stock_code) {
       return new Response(
@@ -18,15 +18,16 @@ export async function POST(request: NextRequest) {
     const authorization = request.headers.get('authorization');
 
     // 转发到 FastAPI 后端
-    const backendResponse = await fetch(`${BACKEND_URL}/api/analyze`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-        ...(authorization && { 'Authorization': authorization }),
-      },
-      body: JSON.stringify({ stock_code }),
-    });
+    const backendResponse = await fetch(
+      `${BACKEND_URL}/api/analyze?stock_code=${encodeURIComponent(stock_code)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/event-stream',
+          ...(authorization && { 'Authorization': authorization }),
+        },
+      }
+    );
 
     if (!backendResponse.ok) {
       const errorText = await backendResponse.text();
