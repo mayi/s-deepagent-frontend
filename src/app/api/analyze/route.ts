@@ -2,6 +2,10 @@ import { NextRequest } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
+// 禁用默认的 body 解析器和超时限制
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 5分钟超时
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
@@ -26,6 +30,8 @@ export async function GET(request: NextRequest) {
           'Accept': 'text/event-stream',
           ...(authorization && { 'Authorization': authorization }),
         },
+        // @ts-ignore - Node.js fetch options
+        signal: null, // 禁用超时
       }
     );
 
