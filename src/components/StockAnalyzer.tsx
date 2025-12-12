@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, Loader2, CheckCircle2, XCircle, Clock, AlertCircle, History, Trash2, RefreshCw, FileText, ArrowLeft, Bell, BellOff } from 'lucide-react';
+import { 
+  Search, Loader2, CheckCircle2, XCircle, Clock, 
+  Trash2, RefreshCw, FileText, ArrowLeft, Bell, 
+  BellOff, Plus, ChevronRight, BarChart3, Sparkles
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import ReactMarkdown from 'react-markdown';
@@ -35,50 +39,54 @@ interface AnalysisTask {
   started_at?: string;
   completed_at?: string;
 }
-type ViewMode = 'input' | 'history' | 'result';
 
 export default function StockAnalyzer() {
   const { token, user, refreshMe } = useAuth();
+  
+  // Core State
+  const [tasks, setTasks] = useState<AnalysisTask[]>([]);
+  const [selectedTask, setSelectedTask] = useState<AnalysisTask | null>(null);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  
+  // Input State
   const [stockCode, setStockCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [validation, setValidation] = useState<StockValidation | null>(null);
   const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const searchInputRef = useRef<HTMLDivElement | null>(null);
-
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
-  const notifiedRef = useRef<Set<string>>(new Set());
-  const tasksRef = useRef<AnalysisTask[]>([]);
-
-  const [viewMode, setViewMode] = useState<ViewMode>('input');
-  const [tasks, setTasks] = useState<AnalysisTask[]>([]);
-  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<AnalysisTask | null>(null);
+  
+  // Task Detail State
   const [taskResult, setTaskResult] = useState<string>('');
   const [taskProgress, setTaskProgress] = useState<TaskProgressItem[]>([]);
-  const [submittedTaskId, setSubmittedTaskId] = useState<string | null>(null);
-
+  
+  // Invite Code State
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteMessage, setInviteMessage] = useState<string>('');
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
 
+  // Refs
+  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchInputRef = useRef<HTMLDivElement | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const tasksRef = useRef<AnalysisTask[]>([]);
+  const notifiedRef = useRef<Set<string>>(new Set());
+
+  // Notification Permission
   const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>(() => {
     if (typeof window === 'undefined') return 'unsupported';
     if (typeof Notification === 'undefined') return 'unsupported';
     return Notification.permission;
   });
 
-  // 加载历史任务
+  // --- Effects & Data Loading ---
+
   const loadTasks = useCallback(async () => {
     setIsLoadingTasks(true);
     try {
       const response = await fetch('/api/analyze/history', {
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
+        headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
       });
       const data = await response.json();
       if (data.success) {
@@ -91,379 +99,55 @@ export default function StockAnalyzer() {
     }
   }, [token]);
 
-  const requestNotificationPermission = async () => {
-    if (typeof Notification === 'undefined') {
-      setNotificationPermission('unsupported');
-      return;
-    }
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-    } catch {
-      setNotificationPermission('denied');
-    }
-  };
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
-  const maybeNotifyTask = useCallback((task: AnalysisTask) => {
-    if (notificationPermission !== 'granted') return;
-    if (typeof Notification === 'undefined') return;
-    if (notifiedRef.current.has(task.task_id)) return;
+  useEffect(() => {
+    tasksRef.current = tasks;
+    // Auto-poll if there are running tasks
+    const hasRunning = tasks.some(t => t.status === 'pending' || t.status === 'running');
+    if (hasRunning) startPolling();
+  }, [tasks]);
 
-    const title = task.status === 'completed'
-      ? `分析完成：${task.stock_code} ${task.stock_name || ''}`.trim()
-      : `分析失败：${task.stock_code} ${task.stock_name || ''}`.trim();
+  // --- Polling Logic ---
 
-    const body = task.status === 'completed'
-      ? '点击查看分析报告'
-      : (task.error_message || '任务执行失败');
-
-    try {
-      const n = new Notification(title, { body });
-      n.onclick = () => {
-        window.focus();
-        setViewMode('result');
-        setSelectedTask(task);
-      };
-      notifiedRef.current.add(task.task_id);
-    } catch {
-      // ignore
-    }
-  }, [notificationPermission]);
-
-  // 查看任务结果
-  const viewTaskResult = async (task: AnalysisTask) => {
-    setSelectedTask(task);
-    setViewMode('result');
-    setTaskResult('');
-    setTaskProgress([]);
-
-    // 进入详情页时，主动刷新一次状态和结果
-    await refreshSelectedTask(task.task_id);
-  };
-
-  const refreshSelectedTask = useCallback(async (taskId: string) => {
-    try {
-      const statusRes = await fetch(`/api/analyze/status/${taskId}`, {
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-      });
-      if (!statusRes.ok) return;
-      const statusData = await statusRes.json();
-
-      setTaskProgress(Array.isArray(statusData.progress) ? statusData.progress : []);
-
-      setTasks(prev => prev.map(t =>
-        t.task_id === taskId
-          ? {
-              ...t,
-              status: statusData.status,
-              completed_at: statusData.completed_at,
-              error_message: statusData.error_message,
-            }
-          : t
-      ));
-
-      setSelectedTask(prev => {
-        if (!prev || prev.task_id !== taskId) return prev;
-        return {
-          ...prev,
-          status: statusData.status,
-          completed_at: statusData.completed_at,
-          error_message: statusData.error_message,
-        };
-      });
-
-      if (statusData.status === 'completed') {
-        const res = await fetch(`/api/analyze/result/${taskId}`, {
-          headers: {
-            ...(token && { 'Authorization': `Bearer ${token}` }),
-          },
-        });
-        const data = await res.json();
-        if (data.status === 'completed' && data.result) {
-          setTaskResult(data.result);
-        }
-      }
-    } catch (error) {
-      console.error('刷新任务详情失败:', error);
-    }
-  }, [token]);
-
-  // 删除任务
-  const deleteTask = async (taskId: string) => {
-    try {
-      const response = await fetch(`/api/analyze/task/${taskId}`, {
-        method: 'DELETE',
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-      });
-      if (response.ok) {
-        setTasks(prev => prev.filter(t => t.task_id !== taskId));
-        if (selectedTask?.task_id === taskId) {
-          setSelectedTask(null);
-          setViewMode('history');
-          setTaskResult('');
-          setTaskProgress([]);
-        }
-      }
-    } catch (error) {
-      console.error('删除任务失败:', error);
-    }
-  };
-
-  // 轮询任务状态
   const pollTaskStatus = useCallback(async (taskId: string) => {
     try {
       const response = await fetch(`/api/analyze/status/${taskId}`, {
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
+        headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
       });
       if (!response.ok) return;
       const data = await response.json();
 
-      const existingTask = tasksRef.current.find(t => t.task_id === taskId);
-      const notifyCandidate: AnalysisTask | null = existingTask
-        ? {
-            ...existingTask,
-            status: data.status,
-            completed_at: data.completed_at,
-            error_message: data.error_message,
-          }
-        : null;
       setTasks(prev => prev.map(t => {
         if (t.task_id !== taskId) return t;
-        return {
+        const updated = {
           ...t,
           status: data.status,
           completed_at: data.completed_at,
           error_message: data.error_message,
         };
+        // Notify if status changed to completed/failed
+        if ((updated.status === 'completed' || updated.status === 'failed') && t.status !== updated.status) {
+          maybeNotifyTask(updated);
+        }
+        return updated;
       }));
 
+      // Update selected task view if it matches
       if (selectedTask?.task_id === taskId) {
         setTaskProgress(Array.isArray(data.progress) ? data.progress : []);
-        if (data.status === 'completed') {
-          await refreshSelectedTask(taskId);
+        if (data.status === 'completed' && selectedTask.status !== 'completed') {
+          refreshSelectedTask(taskId);
         }
-      }
-
-      if (notifyCandidate && (notifyCandidate.status === 'completed' || notifyCandidate.status === 'failed')) {
-        maybeNotifyTask(notifyCandidate);
+        // Update the selected task object in state to reflect status change
+        setSelectedTask(prev => prev ? { ...prev, status: data.status } : null);
       }
     } catch (error) {
       console.error('轮询任务状态失败:', error);
     }
-  }, [token, selectedTask?.task_id, refreshSelectedTask, maybeNotifyTask]);
-
-  // 搜索股票
-  const searchStocks = async (keyword: string) => {
-    if (!keyword.trim() || keyword.length < 1) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/stock/search?keyword=${encodeURIComponent(keyword)}&limit=10`);
-      const data = await response.json();
-      
-      if (data.success && data.stocks) {
-        setSearchResults(data.stocks);
-        setShowSearchResults(data.stocks.length > 0);
-      }
-    } catch (error) {
-      console.error('搜索股票失败:', error);
-    }
-  };
-
-  // 选择搜索结果
-  const selectStock = (stock: StockSearchResult) => {
-    setStockCode(stock.code);
-    setShowSearchResults(false);
-    setValidation({
-      valid: true,
-      message: '股票代码有效',
-      stock_name: stock.name,
-      stock_code: stock.code
-    });
-  };
-
-  // 股票代码验证 (防抖)
-  const validateStock = async (code: string) => {
-    if (!code.trim() || code.length < 6) {
-      setValidation(null);
-      return;
-    }
-
-    setIsValidating(true);
-    try {
-      const response = await fetch(`/api/stock/validate?code=${encodeURIComponent(code)}`);
-      const data: StockValidation = await response.json();
-      setValidation(data);
-    } catch (error) {
-      setValidation({
-        valid: false,
-        message: '验证失败，请检查网络连接',
-        stock_name: '',
-        stock_code: code
-      });
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
-  // 股票代码输入处理（带防抖验证和搜索）
-  const handleStockCodeChange = (value: string) => {
-    setStockCode(value);
-    setValidation(null);
-    
-    // 清除之前的定时器
-    if (validationTimeoutRef.current) {
-      clearTimeout(validationTimeoutRef.current);
-    }
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    // 搜索股票（300ms防抖）
-    if (value.length >= 1) {
-      searchTimeoutRef.current = setTimeout(() => {
-        searchStocks(value);
-      }, 300);
-    } else {
-      setSearchResults([]);
-      setShowSearchResults(false);
-    }
-    
-    // 验证股票代码（500ms防抖）
-    if (value.length >= 6) {
-      validationTimeoutRef.current = setTimeout(() => {
-        validateStock(value);
-      }, 500);
-    }
-  };
-
-  // 点击外部关闭搜索结果
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchInputRef.current && !searchInputRef.current.contains(event.target as Node)) {
-        setShowSearchResults(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // 提交后台任务（默认路径：不再提供“实时等待”）
-  const submitAnalysisTask = async () => {
-    if (!stockCode.trim()) {
-      alert('请输入股票代码');
-      return;
-    }
-
-    // 验证股票代码
-    if (!validation) {
-      await validateStock(stockCode);
-      const response = await fetch(`/api/stock/validate?code=${encodeURIComponent(stockCode)}`);
-      const validationResult: StockValidation = await response.json();
-      if (!validationResult.valid) {
-        setValidation(validationResult);
-        return;
-      }
-    } else if (!validation.valid) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const response = await fetch('/api/analyze/async', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-        body: JSON.stringify({ stock_code: stockCode }),
-      });
-
-      const data = await response.json();
-
-      if (response.status === 402) {
-        alert(data.detail || '积分不足，无法提交分析');
-        return;
-      }
-      
-      if (!response.ok) {
-        alert(data.detail || data.error || '提交失败');
-        return;
-      }
-
-      setSubmittedTaskId(data.task_id);
-
-      // 刷新用户信息（更新积分）
-      if (token) {
-        refreshMe().catch(() => {});
-      }
-      
-      // 添加到任务列表
-      const newTask: AnalysisTask = {
-        task_id: data.task_id,
-        stock_code: data.stock_code,
-        stock_name: data.stock_name || '',
-        status: 'pending',
-        created_at: new Date().toISOString(),
-      };
-      setTasks(prev => [newTask, ...prev]);
-
-      // 切到历史页，并开始全局轮询
-      setViewMode('history');
-      setSelectedTask(null);
-      setTaskResult('');
-      setTaskProgress([]);
-      startPolling();
-      
-      setStockCode('');
-      setValidation(null);
-      
-    } catch (error) {
-      alert('提交任务失败，请检查网络连接');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const generateInvite = async () => {
-    if (!token) {
-      alert('请先登录后再生成邀请码');
-      return;
-    }
-    setIsGeneratingInvite(true);
-    setInviteMessage('');
-    try {
-      const res = await fetch('/api/invite/generate', {
-        method: 'POST',
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setInviteMessage(data.detail || data.message || '邀请码生成失败');
-        return;
-      }
-      setInviteCode(data.code || null);
-      setInviteMessage(data.message || '邀请码已生成');
-    } catch {
-      setInviteMessage('网络错误，请稍后重试');
-    } finally {
-      setIsGeneratingInvite(false);
-    }
-  };
+  }, [token, selectedTask?.task_id]); // Removed circular dependencies
 
   const startPolling = useCallback(() => {
     if (pollingRef.current) return;
@@ -480,502 +164,510 @@ export default function StockAnalyzer() {
     }, 3000);
   }, [pollTaskStatus]);
 
-  useEffect(() => {
-    tasksRef.current = tasks;
-  }, [tasks]);
+  // --- Task Management ---
 
-  useEffect(() => {
-    // 有未完成任务时自动开启轮询
-    const hasRunning = tasks.some(t => t.status === 'pending' || t.status === 'running');
-    if (hasRunning) startPolling();
-  }, [tasks, startPolling]);
-
-  // 切换到历史视图时加载任务
-  useEffect(() => {
-    if (viewMode === 'history') {
-      loadTasks();
-    }
-  }, [viewMode, loadTasks]);
-
-  useEffect(() => {
-    // 自动隐藏“提交成功”提示
-    if (!submittedTaskId) return;
-    const t = setTimeout(() => setSubmittedTaskId(null), 6000);
-    return () => clearTimeout(t);
-  }, [submittedTaskId]);
-
-  useEffect(() => {
-    // 初始化已通知集合（避免频繁重复通知）
-    if (typeof window === 'undefined') return;
+  const refreshSelectedTask = useCallback(async (taskId: string) => {
     try {
-      const raw = window.localStorage.getItem('notifiedTaskIds');
-      if (!raw) return;
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        notifiedRef.current = new Set(arr);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
+      const statusRes = await fetch(`/api/analyze/status/${taskId}`, {
+        headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
+      });
+      if (!statusRes.ok) return;
+      const statusData = await statusRes.json();
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+      setTaskProgress(Array.isArray(statusData.progress) ? statusData.progress : []);
+      
+      if (statusData.status === 'completed') {
+        const res = await fetch(`/api/analyze/result/${taskId}`, {
+          headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
+        });
+        const data = await res.json();
+        if (data.status === 'completed' && data.result) {
+          setTaskResult(data.result);
+        }
+      }
+    } catch (error) {
+      console.error('刷新任务详情失败:', error);
+    }
+  }, [token]);
+
+  const handleSelectTask = async (task: AnalysisTask) => {
+    setSelectedTask(task);
+    setTaskResult('');
+    setTaskProgress([]);
+    // On mobile, this would trigger a view transition
+    await refreshSelectedTask(task.task_id);
+  };
+
+  const handleDeleteTask = async (e: React.MouseEvent, taskId: string) => {
+    e.stopPropagation();
+    if (!confirm('确定删除此任务吗？')) return;
+    
     try {
-      const arr = Array.from(notifiedRef.current).slice(-200);
-      window.localStorage.setItem('notifiedTaskIds', JSON.stringify(arr));
-    } catch {
-      // ignore
-    }
-  }, [tasks]);
-
-  useEffect(() => {
-    return () => {
-      if (validationTimeoutRef.current) {
-        clearTimeout(validationTimeoutRef.current);
+      const response = await fetch(`/api/analyze/task/${taskId}`, {
+        method: 'DELETE',
+        headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
+      });
+      if (response.ok) {
+        setTasks(prev => prev.filter(t => t.task_id !== taskId));
+        if (selectedTask?.task_id === taskId) {
+          setSelectedTask(null);
+        }
       }
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-      }
-    };
-  }, []);
-
-  // 获取状态徽章
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">等待中</span>;
-      case 'running':
-        return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />运行中</span>;
-      case 'completed':
-        return <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">已完成</span>;
-      case 'failed':
-        return <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">失败</span>;
-      default:
-        return null;
+    } catch (error) {
+      console.error('删除任务失败:', error);
     }
   };
 
+  const submitAnalysisTask = async () => {
+    if (!stockCode.trim()) return;
+    
+    // Validation logic
+    if (!validation) {
+      await validateStock(stockCode);
+      // Re-check validation after await
+      // For simplicity, we'll rely on the user waiting for the indicator or just submitting
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/analyze/async', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        body: JSON.stringify({ stock_code: stockCode }),
+      });
+
+      const data = await response.json();
+
+      if (response.status === 402) {
+        alert(data.detail || '积分不足');
+        return;
+      }
+      
+      if (!response.ok) {
+        alert(data.detail || '提交失败');
+        return;
+      }
+
+      // Success
+      if (token) refreshMe().catch(() => {});
+      
+      const newTask: AnalysisTask = {
+        task_id: data.task_id,
+        stock_code: data.stock_code,
+        stock_name: data.stock_name || '',
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      };
+      
+      setTasks(prev => [newTask, ...prev]);
+      setStockCode('');
+      setValidation(null);
+      handleSelectTask(newTask); // Auto-select the new task
+      startPolling();
+      
+    } catch (error) {
+      alert('提交任务失败');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- Search & Validation Helpers ---
+
+  const searchStocks = async (keyword: string) => {
+    if (!keyword.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    try {
+      const response = await fetch(`/api/stock/search?keyword=${encodeURIComponent(keyword)}&limit=10`);
+      const data = await response.json();
+      if (data.success && data.stocks) {
+        setSearchResults(data.stocks);
+        setShowSearchResults(data.stocks.length > 0);
+      }
+    } catch (error) { console.error(error); }
+  };
+
+  const validateStock = async (code: string) => {
+    if (!code.trim() || code.length < 6) {
+      setValidation(null);
+      return;
+    }
+    setIsValidating(true);
+    try {
+      const response = await fetch(`/api/stock/validate?code=${encodeURIComponent(code)}`);
+      const data = await response.json();
+      setValidation(data);
+    } catch {
+      setValidation({ valid: false, message: '验证失败', stock_name: '', stock_code: code });
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handleStockCodeChange = (value: string) => {
+    setStockCode(value);
+    setValidation(null);
+    if (validationTimeoutRef.current) clearTimeout(validationTimeoutRef.current);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    
+    if (value.length >= 1) {
+      searchTimeoutRef.current = setTimeout(() => searchStocks(value), 300);
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+    
+    if (value.length >= 6) {
+      validationTimeoutRef.current = setTimeout(() => validateStock(value), 500);
+    }
+  };
+
+  // --- Notifications & Invites ---
+
+  const requestNotificationPermission = async () => {
+    if (typeof Notification === 'undefined') return;
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+    } catch { setNotificationPermission('denied'); }
+  };
+
+  const maybeNotifyTask = (task: AnalysisTask) => {
+    if (notificationPermission !== 'granted' || typeof Notification === 'undefined') return;
+    if (notifiedRef.current.has(task.task_id)) return;
+
+    const title = task.status === 'completed' ? `分析完成：${task.stock_name}` : `分析失败：${task.stock_name}`;
+    try {
+      new Notification(title, { body: '点击查看详情' });
+      notifiedRef.current.add(task.task_id);
+    } catch {}
+  };
+
+  const generateInvite = async () => {
+    if (!token) return;
+    setIsGeneratingInvite(true);
+    try {
+      const res = await fetch('/api/invite/generate', {
+        method: 'POST',
+        headers: { ...(token && { 'Authorization': `Bearer ${token}` }), 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setInviteCode(data.code);
+        setInviteMessage('邀请码已生成');
+      } else {
+        setInviteMessage(data.detail || '生成失败');
+      }
+    } catch {
+      setInviteMessage('网络错误');
+    } finally {
+      setIsGeneratingInvite(false);
+    }
+  };
+
+  // --- Render Helpers ---
+
+  const getStatusBadge = (status: string) => {
+    const styles = {
+      pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+      running: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+      completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+    };
+    const labels = { pending: "等待中", running: "分析中", completed: "已完成", failed: "失败" };
+    // @ts-ignore
+    return <span className={`px-2 py-0.5 text-xs rounded-full ${styles[status] || ''}`}>{labels[status] || status}</span>;
+  };
+
+  // --- Main Render ---
+
   return (
-    <div className="space-y-6">
-      {/* 模式切换和导航 */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* 视图切换 */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setViewMode('input')}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-                viewMode === 'input'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-            >
-              <Search className="w-4 h-4" />
-              新分析
-            </button>
-            <button
-              onClick={() => setViewMode('history')}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-                viewMode === 'history'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              历史任务
-              {tasks.filter(t => t.status === 'running' || t.status === 'pending').length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs bg-orange-500 text-white rounded-full">
-                  {tasks.filter(t => t.status === 'running' || t.status === 'pending').length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* 通知权限引导 */}
-          <div className="flex items-center gap-2">
-            {notificationPermission === 'unsupported' ? (
-              <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                <BellOff className="w-4 h-4" />
-                当前浏览器不支持通知
-              </div>
-            ) : notificationPermission === 'granted' ? (
-              <div className="text-sm text-green-600 dark:text-green-400 flex items-center gap-2">
-                <Bell className="w-4 h-4" />
-                通知已开启
-              </div>
-            ) : notificationPermission === 'denied' ? (
-              <div className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                <BellOff className="w-4 h-4" />
-                通知被禁止（请在浏览器设置中允许本站）
-              </div>
-            ) : (
-              <button
-                onClick={requestNotificationPermission}
-                className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2"
-              >
-                <Bell className="w-4 h-4" />
-                启用完成通知
-              </button>
-            )}
-          </div>
+    <div className="h-full flex flex-col lg:flex-row gap-6 overflow-hidden">
+      
+      {/* Sidebar: Task List */}
+      <div className={`lg:w-1/3 xl:w-1/4 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden ${selectedTask ? 'hidden lg:flex' : 'flex h-full'}`}>
+        {/* Sidebar Header */}
+        <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50">
+          <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-blue-500" />
+            分析列表
+          </h2>
+          <button 
+            onClick={() => setSelectedTask(null)}
+            className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors shadow-sm"
+            title="新分析"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
         </div>
-        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-          默认使用后台分析：提交后可关闭页面，稍后在“历史任务”查看结果。
-        </p>
-      </motion.div>
 
-      {/* Input Section */}
-      {viewMode === 'input' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8"
-        >
-          {user && (
-            <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  当前积分：<span className="font-semibold">{typeof user.points === 'number' ? user.points : 0}</span>
-                  <span className="ml-3 text-gray-500 dark:text-gray-400">本次分析将消耗 100 积分</span>
-                </div>
-                <button
-                  onClick={generateInvite}
-                  disabled={isGeneratingInvite}
-                  className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isGeneratingInvite ? '生成中...' : '生成邀请码'}
-                </button>
-              </div>
-
-              {(inviteMessage || inviteCode) && (
-                <div className="mt-3 text-sm">
-                  {inviteMessage && (
-                    <div className="text-gray-600 dark:text-gray-300">{inviteMessage}</div>
-                  )}
-                  {inviteCode && (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="px-3 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 font-mono text-sm">
-                        {inviteCode}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(inviteCode);
-                            setInviteMessage('邀请码已复制到剪贴板');
-                          } catch {
-                            setInviteMessage('复制失败，请手动复制');
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm"
-                      >
-                        复制
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-4">
-            <div className="flex-1 relative" ref={searchInputRef}>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={stockCode}
-                  onChange={(e) => handleStockCodeChange(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !isSubmitting && submitAnalysisTask()}
-                  onFocus={() => stockCode.length >= 1 && searchResults.length > 0 && setShowSearchResults(true)}
-                  placeholder="输入股票代码或名称，如: 000001, 平安银行"
-                  disabled={isSubmitting}
-                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 disabled:opacity-50 ${
-                    validation?.valid === false
-                      ? 'border-red-400 dark:border-red-500'
-                      : validation?.valid === true
-                      ? 'border-green-400 dark:border-green-500'
-                      : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                />
-                {/* 验证状态指示器 */}
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {isValidating ? (
-                    <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
-                  ) : validation?.valid === true ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  ) : validation?.valid === false ? (
-                    <XCircle className="w-5 h-5 text-red-500" />
-                  ) : null}
-                </div>
-              </div>
-              
-              {/* 搜索结果下拉框 */}
-              <AnimatePresence>
-                {showSearchResults && searchResults.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-700 rounded-xl shadow-xl border border-gray-200 dark:border-gray-600 max-h-64 overflow-y-auto"
-                  >
-                    {searchResults.map((stock, index) => (
-                      <button
-                        key={stock.code}
-                        onClick={() => selectStock(stock)}
-                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-between ${
-                          index > 0 ? 'border-t border-gray-100 dark:border-gray-600' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">
-                            {stock.code}
-                          </span>
-                          <span className="text-gray-700 dark:text-gray-300">
-                            {stock.name}
-                          </span>
-                        </div>
-                        <Search className="w-4 h-4 text-gray-400" />
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              
-              {/* 验证消息 */}
-              {validation && !showSearchResults && (
-                <div className={`mt-2 text-sm flex items-center gap-1 ${
-                  validation.valid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                }`}>
-                  {validation.valid ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>已验证: {validation.stock_name || validation.stock_code}</span>
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircle className="w-4 h-4" />
-                      <span>{validation.message}</span>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-            <button
-              onClick={submitAnalysisTask}
-              disabled={isSubmitting || (validation !== null && !validation.valid)}
-              className="px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  提交中...
-                </>
-              ) : (
-                <>
-                  <Search className="w-5 h-5" />
-                  提交分析
-                </>
-              )}
-            </button>
-          </div>
-        </motion.div>
-      )}
-
-      {/* 历史任务列表 */}
-      {viewMode === 'history' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              历史分析任务
-            </h2>
-            <button
-              onClick={loadTasks}
-              disabled={isLoadingTasks}
-              className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            >
-              <RefreshCw className={`w-5 h-5 text-gray-600 dark:text-gray-400 ${isLoadingTasks ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-
+        {/* Task List */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {isLoadingTasks ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-            </div>
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
           ) : tasks.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              <History className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>暂无分析任务</p>
-              <p className="text-sm mt-1">提交后台任务后，可以在这里查看进度和结果</p>
+            <div className="text-center py-10 text-gray-400">
+              <p className="text-sm">暂无历史记录</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {tasks.map((task) => (
-                <div
-                  key={task.task_id}
-                  className={`p-4 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${
-                    selectedTask?.task_id === task.task_id
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
-                  onClick={() => viewTaskResult(task)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-lg font-semibold text-blue-600 dark:text-blue-400">
-                        {task.stock_code}
-                      </span>
-                      <span className="text-gray-700 dark:text-gray-300">
-                        {task.stock_name}
-                      </span>
-                      {getStatusBadge(task.status)}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {new Date(task.created_at).toLocaleString('zh-CN')}
-                      </span>
-                      {task.status === 'completed' && (
-                        <FileText className="w-4 h-4 text-green-500" />
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('确定删除此任务吗？')) {
-                            deleteTask(task.task_id);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+            tasks.map(task => (
+              <div
+                key={task.task_id}
+                onClick={() => handleSelectTask(task)}
+                className={`group p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
+                  selectedTask?.task_id === task.task_id
+                    ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
+                    : 'bg-white border-gray-100 dark:bg-gray-800 dark:border-gray-700 hover:border-blue-100 dark:hover:border-gray-600'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <div className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    {task.stock_name || task.stock_code}
                   </div>
-                  {task.error_message && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                      {task.error_message}
-                    </p>
-                  )}
+                  {getStatusBadge(task.status)}
                 </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-      )}
-
-      {/* 任务结果查看 */}
-      {viewMode === 'result' && selectedTask && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setViewMode('history')}
-                className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="font-mono text-blue-600 dark:text-blue-400">{selectedTask.stock_code}</span>
-                  <span>{selectedTask.stock_name}</span>
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {new Date(selectedTask.created_at).toLocaleString('zh-CN')}
-                </p>
+                <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                  <span className="font-mono">{task.stock_code}</span>
+                  <div className="flex items-center gap-2">
+                    <span>{new Date(task.created_at).toLocaleDateString()}</span>
+                    <button 
+                      onClick={(e) => handleDeleteTask(e, task.task_id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => refreshSelectedTask(selectedTask.task_id)}
-                className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                刷新
-              </button>
-              {getStatusBadge(selectedTask.status)}
+            ))
+          )}
+        </div>
+        
+        {/* Notification Toggle (Bottom of Sidebar) */}
+        <div className="p-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-800/30">
+           <button
+            onClick={requestNotificationPermission}
+            className="w-full flex items-center justify-center gap-2 text-xs text-gray-500 hover:text-blue-600 transition-colors py-2"
+          >
+            {notificationPermission === 'granted' ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+            {notificationPermission === 'granted' ? '通知已开启' : '开启完成通知'}
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className={`flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden ${!selectedTask ? 'hidden lg:flex' : 'flex h-full'}`}>
+        
+        {/* State A: New Analysis Input */}
+        {!selectedTask ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-2xl mx-auto w-full">
+            <div className="w-full space-y-8">
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <Sparkles className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">开始新的分析</h1>
+                <p className="text-gray-500 dark:text-gray-400">输入股票代码，AI 代理将为您生成深度投资报告</p>
+              </div>
+
+              {/* Search Box */}
+              <div className="relative group" ref={searchInputRef}>
+                <div className={`absolute inset-0 bg-blue-500/5 rounded-2xl blur-xl transition-opacity ${isSubmitting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+                <div className="relative flex items-center">
+                  <Search className="absolute left-4 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={stockCode}
+                    onChange={(e) => handleStockCodeChange(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && submitAnalysisTask()}
+                    onFocus={() => stockCode.length >= 1 && searchResults.length > 0 && setShowSearchResults(true)}
+                    placeholder="输入代码或名称 (如: 000001, 平安银行)"
+                    className="w-full pl-12 pr-32 py-4 text-lg bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-blue-500 focus:ring-0 transition-all shadow-sm"
+                  />
+                  <div className="absolute right-2 flex items-center gap-2">
+                    {isValidating && <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />}
+                    {validation?.valid && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+                    <button
+                      onClick={submitAnalysisTask}
+                      disabled={isSubmitting || (validation !== null && !validation.valid)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {isSubmitting ? '分析中...' : '开始'}
+                      {!isSubmitting && <ChevronRight className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Dropdown */}
+                <AnimatePresence>
+                  {showSearchResults && searchResults.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-20"
+                    >
+                      {searchResults.map((stock) => (
+                        <button
+                          key={stock.code}
+                          onClick={() => {
+                            setStockCode(stock.code);
+                            setShowSearchResults(false);
+                            setValidation({ valid: true, message: '有效', stock_name: stock.name, stock_code: stock.code });
+                          }}
+                          className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex justify-between items-center group/item"
+                        >
+                          <span className="font-medium text-gray-900 dark:text-white">{stock.name}</span>
+                          <span className="font-mono text-sm text-gray-500 group-hover/item:text-blue-500">{stock.code}</span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
+                {/* Validation Message */}
+                {validation && !validation.valid && (
+                  <div className="absolute top-full left-0 mt-2 text-sm text-red-500 flex items-center gap-1">
+                    <XCircle className="w-4 h-4" /> {validation.message}
+                  </div>
+                )}
+              </div>
+
+              {/* User Info / Invite Code */}
+              {user && (
+                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    当前积分: <span className="font-bold text-gray-900 dark:text-white">{user.points}</span>
+                    <span className="mx-2">|</span>
+                    每次分析消耗 100 积分
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {inviteCode ? (
+                      <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <span className="font-mono text-sm">{inviteCode}</span>
+                        <button 
+                          onClick={() => navigator.clipboard.writeText(inviteCode).then(() => setInviteMessage('已复制'))}
+                          className="text-xs text-blue-500 hover:underline"
+                        >
+                          复制
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={generateInvite}
+                        disabled={isGeneratingInvite}
+                        className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                      >
+                        {isGeneratingInvite ? '生成中...' : '生成邀请码'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              {inviteMessage && <p className="text-center text-xs text-gray-400">{inviteMessage}</p>}
             </div>
           </div>
-
-          {selectedTask.status === 'pending' && (
-            <div className="text-center py-12">
-              <Clock className="w-12 h-12 mx-auto mb-3 text-yellow-500" />
-              <p className="text-gray-600 dark:text-gray-400">任务等待执行中...</p>
+        ) : (
+          /* State B: Task Detail View */
+          <div className="flex flex-col h-full">
+            {/* Detail Header */}
+            <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-800">
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setSelectedTask(null)}
+                  className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    {selectedTask.stock_name}
+                    <span className="text-sm font-normal text-gray-500 font-mono">({selectedTask.stock_code})</span>
+                  </h2>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <Clock className="w-3 h-3" />
+                    {new Date(selectedTask.created_at).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {getStatusBadge(selectedTask.status)}
+                <button 
+                  onClick={() => refreshSelectedTask(selectedTask.task_id)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500"
+                  title="刷新"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          )}
 
-          {selectedTask.status === 'running' && (
-            <div className="text-center py-12">
-              <Loader2 className="w-12 h-12 mx-auto mb-3 text-blue-500 animate-spin" />
-              <p className="text-gray-600 dark:text-gray-400">正在分析中，请稍候...</p>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">您可以关闭页面，稍后再来查看结果</p>
-            </div>
-          )}
+            {/* Detail Content */}
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30 dark:bg-gray-900/30">
+              {selectedTask.status === 'pending' && (
+                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                  <Clock className="w-12 h-12 mb-4 text-yellow-400" />
+                  <p>任务排队中...</p>
+                </div>
+              )}
 
-          {selectedTask.status === 'failed' && (
-            <div className="text-center py-12">
-              <XCircle className="w-12 h-12 mx-auto mb-3 text-red-500" />
-              <p className="text-gray-600 dark:text-gray-400">分析失败</p>
-              {selectedTask.error_message && (
-                <p className="text-sm text-red-500 mt-2">{selectedTask.error_message}</p>
+              {selectedTask.status === 'running' && (
+                <div className="max-w-2xl mx-auto">
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="w-12 h-12 mb-4 text-blue-500 animate-spin" />
+                    <p className="text-lg font-medium text-gray-700 dark:text-gray-300">AI 代理正在深度分析...</p>
+                    <p className="text-sm text-gray-500 mt-2">这通常需要 1-2 分钟，您可以稍后查看</p>
+                  </div>
+                  {/* Live Logs */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm max-h-60 overflow-y-auto">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">执行日志</h3>
+                    <div className="space-y-3">
+                      {taskProgress.map((p, i) => (
+                        <div key={i} className="flex gap-3 text-sm">
+                          <span className="text-gray-400 font-mono text-xs whitespace-nowrap">
+                            {p.timestamp ? new Date(p.timestamp).toLocaleTimeString() : ''}
+                          </span>
+                          <span className="text-gray-700 dark:text-gray-300">{p.message}</span>
+                        </div>
+                      ))}
+                      {taskProgress.length === 0 && <p className="text-sm text-gray-400 italic">等待代理启动...</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedTask.status === 'failed' && (
+                <div className="flex flex-col items-center justify-center h-64 text-red-500">
+                  <XCircle className="w-12 h-12 mb-4" />
+                  <p className="font-medium">分析失败</p>
+                  <p className="text-sm mt-2 text-gray-500">{selectedTask.error_message}</p>
+                </div>
+              )}
+
+              {selectedTask.status === 'completed' && taskResult && (
+                <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-8 border border-gray-100 dark:border-gray-700">
+                  <article className="prose prose-slate dark:prose-invert max-w-none 
+                    prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h2:border-b prose-h2:pb-2 prose-h2:mt-8
+                    prose-p:text-gray-600 dark:prose-p:text-gray-300 prose-p:leading-relaxed
+                    prose-strong:text-gray-900 dark:prose-strong:text-white
+                    prose-li:text-gray-600 dark:prose-li:text-gray-300">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {taskResult}
+                    </ReactMarkdown>
+                  </article>
+                </div>
               )}
             </div>
-          )}
-
-          {/* 进度日志 */}
-          {taskProgress.length > 0 && selectedTask.status !== 'completed' && (
-            <div className="mt-4 max-h-64 overflow-y-auto space-y-2 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-              {taskProgress.map((p, idx) => (
-                <div key={idx} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
-                  <span className="text-gray-400 dark:text-gray-600 font-mono text-xs mt-0.5">
-                    {p.timestamp ? new Date(p.timestamp).toLocaleTimeString('zh-CN', { hour12: false }) : '--:--:--'}
-                  </span>
-                  <span className="flex-1">{p.message}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {selectedTask.status === 'completed' && taskResult && (
-            <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-bold prose-h1:text-3xl prose-h2:text-2xl prose-h2:border-b prose-h2:pb-2 prose-h3:text-xl prose-a:text-blue-600 prose-strong:text-gray-900 dark:prose-strong:text-white prose-ul:list-disc prose-ol:list-decimal">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {taskResult}
-              </ReactMarkdown>
-            </div>
-          )}
-        </motion.div>
-      )}
-
-      {/* 后台任务提交成功提示 */}
-      <AnimatePresence>
-        {submittedTaskId && (
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-6 right-6 bg-green-500 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3"
-          >
-            <CheckCircle2 className="w-6 h-6" />
-            <div>
-              <p className="font-medium">任务已提交</p>
-              <p className="text-sm opacity-90">任务ID: {submittedTaskId}</p>
-            </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 }
