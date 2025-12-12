@@ -5,6 +5,15 @@ const API_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 export async function GET(request: NextRequest) {
   try {
     const authorization = request.headers.get('authorization');
+    
+    // Require authentication
+    if (!authorization) {
+      return NextResponse.json(
+        { error: '请先登录' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const limit = searchParams.get('limit') || '20';
     const status = searchParams.get('status');
@@ -15,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(url.toString(), {
       headers: {
-        ...(authorization && { 'Authorization': authorization }),
+        'Authorization': authorization,
       },
     });
 

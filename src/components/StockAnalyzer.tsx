@@ -83,11 +83,27 @@ export default function StockAnalyzer() {
   // --- Effects & Data Loading ---
 
   const loadTasks = useCallback(async () => {
+    // Only load tasks if user is logged in
+    if (!token) {
+      setTasks([]);
+      setIsLoadingTasks(false);
+      return;
+    }
+    
     setIsLoadingTasks(true);
     try {
       const response = await fetch('/api/analyze/history', {
         headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
       });
+      
+      if (!response.ok) {
+        // Handle 401 Unauthorized
+        if (response.status === 401) {
+          setTasks([]);
+          return;
+        }
+      }
+      
       const data = await response.json();
       if (data.success) {
         setTasks(data.tasks);
@@ -221,6 +237,12 @@ export default function StockAnalyzer() {
   const submitAnalysisTask = async () => {
     if (!stockCode.trim()) return;
     
+    // Check if user is logged in
+    if (!token || !user) {
+      alert('请先登录后再进行分析');
+      return;
+    }
+    
     // Validation logic
     if (!validation) {
       await validateStock(stockCode);
@@ -240,6 +262,11 @@ export default function StockAnalyzer() {
       });
 
       const data = await response.json();
+
+      if (response.status === 401) {
+        alert('请先登录');
+        return;
+      }
 
       if (response.status === 402) {
         alert(data.detail || '积分不足');
@@ -400,7 +427,10 @@ export default function StockAnalyzer() {
             分析列表
           </h2>
           <button 
-            onClick={() => setSelectedTask(null)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedTask(null);
+            }}
             className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors shadow-sm"
             title="新分析"
           >
@@ -541,7 +571,13 @@ export default function StockAnalyzer() {
               </div>
 
               {/* User Info / Invite Code */}
-              {user && (
+              {!user ? (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 border border-yellow-200 dark:border-yellow-800">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200 text-center">
+                    ⚠️ 需要登录后才能使用分析功能
+                  </p>
+                </div>
+              ) : (
                 <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     当前积分: <span className="font-bold text-gray-900 dark:text-white">{user.points}</span>
