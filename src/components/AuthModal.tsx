@@ -18,6 +18,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -51,13 +52,14 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
           setIsLoading(false);
           return;
         }
-        const result = await register(email, password);
+        const result = await register(email, password, inviteCode);
         if (result.success) {
           setMessage({ type: 'success', text: '注册成功，请登录' });
           setTimeout(() => {
             setMode('login');
             setPassword('');
             setConfirmPassword('');
+            setInviteCode('');
             setMessage(null);
           }, 1500);
         } else {
@@ -102,6 +104,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
   const resetForm = () => {
     setEmail('');
     setPassword('');
+    setInviteCode('');
     setConfirmPassword('');
     setResetToken('');
     setMessage(null);
@@ -113,6 +116,9 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
     if (newMode !== 'reset') {
       setPassword('');
       setConfirmPassword('');
+    }
+    if (newMode !== 'register') {
+      setInviteCode('');
     }
   };
 
@@ -212,6 +218,29 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'login' }: Au
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Invite Code Field */}
+            {mode === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  邀请码
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
+                    placeholder="请输入邀请码（必填）"
+                    required
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  没有邀请码将无法注册。
+                </p>
               </div>
             )}
 

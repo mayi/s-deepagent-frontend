@@ -5,6 +5,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 interface User {
   id: number;
   email: string;
+  points?: number;
 }
 
 interface AuthContextType {
@@ -12,7 +13,8 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
-  register: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
+  register: (email: string, password: string, inviteCode: string) => Promise<{ success: boolean; message: string }>;
+  refreshMe: () => Promise<boolean>;
   logout: () => void;
   forgotPassword: (email: string) => Promise<{ success: boolean; message: string; reset_token?: string }>;
   resetPassword: (resetToken: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
@@ -34,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(savedToken);
       setUser(JSON.parse(savedUser));
       
-      // 验证 token 是否仍然有效
+      // 验证 token 是否仍然有效，并刷新用户信息（含积分）
       validateToken(savedToken).then(valid => {
         if (!valid) {
           logout();
@@ -51,10 +53,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           'Authorization': `Bearer ${authToken}`
         }
       });
-      return response.ok;
+      if (!response.ok) return false;
+      const data = await response.json();
+      if (data?.success && data?.user) {
+        setUser(data.user);
+        localStorage.setItem('auth_user', JSON.stringify(data.user));
+      }
+      return true;
     } catch {
       return false;
     }
+  };
+
+  const refreshMe = async (): Promise<boolean> => {
+    if (!token) return false;
+    return validateToken(token);
   };
 
   const login = async (email: string, password: string) => {
@@ -83,14 +96,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string, inviteCode: string) => {
     try {
       const response = await fetch(`/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, invite_code: inviteCode })
       });
 
       const data = await response.json();
@@ -171,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       register,
+      refreshMe,
       logout,
       forgotPassword,
       resetPassword

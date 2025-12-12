@@ -40,10 +40,11 @@ npm run dev
 在项目根目录运行：
 
 ```bash
+cd backend
 python api.py
 ```
 
-后端 API 将在 http://localhost:5000 启动
+后端 API 将在 http://localhost:8000 启动
 
 ## 项目结构
 
@@ -98,15 +99,13 @@ frontend/
 
 前端通过 Server-Sent Events (SSE) 实时接收后端分析进度：
 
-```typescript
-const eventSource = new EventSource(
-  `http://localhost:5000/api/analyze?stock_code=${stockCode}`
-);
+说明：前端默认通过 Next.js 的 BFF 路由调用后端（`/api/**`），避免在浏览器端硬编码后端地址。
 
-eventSource.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  // 处理进度更新
-};
+示例（SSE 流式）：
+```typescript
+// GET /api/analyze?stock_code=... 由 Next 转发到后端 /api/analyze
+const res = await fetch(`/api/analyze?stock_code=${encodeURIComponent(stockCode)}`);
+// 然后使用 ReadableStream 读取 SSE 字节流
 ```
 
 ## 构建部署

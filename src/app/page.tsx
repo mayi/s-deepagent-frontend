@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import StockAnalyzer from '@/components/StockAnalyzer';
 import StockRadar from '@/components/StockRadar';
 import AuthModal from '@/components/AuthModal';
@@ -42,6 +43,12 @@ export default function Home() {
             
             {/* User Section */}
             <div className="flex items-center gap-4">
+              <Link
+                href="/points"
+                className="text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                积分规则
+              </Link>
               {isLoading ? (
                 <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
               ) : user ? (
@@ -52,6 +59,13 @@ export default function Home() {
                       {user.email}
                     </span>
                   </div>
+
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg">
+                    <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                      积分: {typeof user.points === 'number' ? user.points : 0}
+                    </span>
+                  </div>
+
                   <button
                     onClick={logout}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"

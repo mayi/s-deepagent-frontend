@@ -38,7 +38,7 @@ interface AnalysisTask {
 type ViewMode = 'input' | 'history' | 'result';
 
 export default function StockAnalyzer() {
-  const { token } = useAuth();
+  const { token, user, refreshMe } = useAuth();
   const [stockCode, setStockCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
@@ -60,6 +60,10 @@ export default function StockAnalyzer() {
   const [taskResult, setTaskResult] = useState<string>('');
   const [taskProgress, setTaskProgress] = useState<TaskProgressItem[]>([]);
   const [submittedTaskId, setSubmittedTaskId] = useState<string | null>(null);
+
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [inviteMessage, setInviteMessage] = useState<string>('');
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
 
   const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>(() => {
     if (typeof window === 'undefined') return 'unsupported';
@@ -386,6 +390,11 @@ export default function StockAnalyzer() {
       });
 
       const data = await response.json();
+
+      if (response.status === 402) {
+        alert(data.detail || '积分不足，无法提交分析');
+        return;
+      }
       
       if (!response.ok) {
         alert(data.detail || data.error || '提交失败');
@@ -393,6 +402,11 @@ export default function StockAnalyzer() {
       }
 
       setSubmittedTaskId(data.task_id);
+
+      // 刷新用户信息（更新积分）
+      if (token) {
+        refreshMe().catch(() => {});
+      }
       
       // 添加到任务列表
       const newTask: AnalysisTask = {
@@ -418,6 +432,36 @@ export default function StockAnalyzer() {
       alert('提交任务失败，请检查网络连接');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const generateInvite = async () => {
+    if (!token) {
+      alert('请先登录后再生成邀请码');
+      return;
+    }
+    setIsGeneratingInvite(true);
+    setInviteMessage('');
+    try {
+      const res = await fetch('/api/invite/generate', {
+        method: 'POST',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setInviteMessage(data.detail || data.message || '邀请码生成失败');
+        return;
+      }
+      setInviteCode(data.code || null);
+      setInviteMessage(data.message || '邀请码已生成');
+    } catch {
+      setInviteMessage('网络错误，请稍后重试');
+    } finally {
+      setIsGeneratingInvite(false);
     }
   };
 
@@ -595,6 +639,53 @@ export default function StockAnalyzer() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8"
         >
+          {user && (
+            <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  当前积分：<span className="font-semibold">{typeof user.points === 'number' ? user.points : 0}</span>
+                  <span className="ml-3 text-gray-500 dark:text-gray-400">本次分析将消耗 100 积分</span>
+                </div>
+                <button
+                  onClick={generateInvite}
+                  disabled={isGeneratingInvite}
+                  className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingInvite ? '生成中...' : '生成邀请码'}
+                </button>
+              </div>
+
+              {(inviteMessage || inviteCode) && (
+                <div className="mt-3 text-sm">
+                  {inviteMessage && (
+                    <div className="text-gray-600 dark:text-gray-300">{inviteMessage}</div>
+                  )}
+                  {inviteCode && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="px-3 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 font-mono text-sm">
+                        {inviteCode}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(inviteCode);
+                            setInviteMessage('邀请码已复制到剪贴板');
+                          } catch {
+                            setInviteMessage('复制失败，请手动复制');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm"
+                      >
+                        复制
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-4">
             <div className="flex-1 relative" ref={searchInputRef}>
               <div className="relative">

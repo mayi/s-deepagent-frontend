@@ -215,7 +215,7 @@ animate={{ opacity: 1, x: 0 }}
 
 ```typescript
 const eventSource = new EventSource(
-  `http://localhost:5000/api/analyze?stock_code=${stockCode}`
+  `http://localhost:8000/api/analyze?stock_code=${stockCode}`
 );
 ```
 
