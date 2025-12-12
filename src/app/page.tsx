@@ -32,10 +32,10 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  A股智能分析系统
+                  AstraShare
                 </h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  基于DeepAgents的多代理股票分析平台
+                  AI-powered A-share stock intelligence
                 </p>
               </div>
             </div>

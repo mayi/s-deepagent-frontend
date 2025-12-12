@@ -6,8 +6,8 @@ import { AuthProvider } from '@/contexts/AuthContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'A股智能分析系统',
-  description: '基于DeepAgents的多代理股票分析系统',
+  title: 'AstraShare',
+  description: 'AI-powered A-share stock intelligence platform',
 };
 
 export default function RootLayout({
