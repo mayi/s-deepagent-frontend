@@ -89,7 +89,10 @@ export default function Home() {
       </header>
 
       {/* Main Content Container */}
-      <div className="flex-1 flex flex-col min-h-0 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 gap-6">
+      <div
+        className="flex-1 flex flex-col min-h-0 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 gap-6 overflow-y-auto lg:overflow-hidden"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
         
         {/* Navigation Tabs & Alerts */}
         <div className="flex-none flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

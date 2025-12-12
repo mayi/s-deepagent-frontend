@@ -73,8 +73,10 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchInputRef = useRef<HTMLDivElement | null>(null);
+  const stockInputRef = useRef<HTMLInputElement | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const tasksRef = useRef<AnalysisTask[]>([]);
+  const mainContentRef = useRef<HTMLDivElement | null>(null);
   const notifiedRef = useRef<Set<string>>(new Set());
 
   // Notification Permission - initialize as 'unsupported' to match SSR
@@ -425,10 +427,10 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
   // --- Main Render ---
 
   return (
-    <div className="h-full flex flex-col lg:flex-row gap-6 overflow-hidden">
+    <div className="w-full flex flex-col lg:flex-row gap-6 lg:h-full lg:overflow-hidden">
       
-      {/* Sidebar: Task List */}
-      <div className={`lg:w-1/3 xl:w-1/4 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden ${selectedTask ? 'hidden lg:flex' : 'flex h-full'}`}>
+      {/* Sidebar: Task List (mobile 下放后面展示) */}
+      <div className="order-2 lg:order-1 w-full lg:w-1/3 xl:w-1/4 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden lg:h-full">
         {/* Sidebar Header */}
         <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50">
           <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -438,7 +440,17 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
           <button 
             onClick={(e) => {
               e.stopPropagation();
+              // 始终切换到新建分析，并滚动到输入区域 + 聚焦输入框（移动端更友好）
               setSelectedTask(null);
+              if (mainContentRef.current) {
+                mainContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              } else {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+              // 延迟聚焦以等待布局切换完成
+              setTimeout(() => {
+                stockInputRef.current?.focus();
+              }, 150);
             }}
             className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors shadow-sm"
             title="新分析"
@@ -448,7 +460,7 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
         </div>
 
         {/* Task List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        <div className="p-3 space-y-2 lg:flex-1 lg:overflow-y-auto">
           {isLoadingTasks ? (
             <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
           ) : tasks.length === 0 ? (
@@ -502,7 +514,10 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
       </div>
 
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden ${!selectedTask ? 'hidden lg:flex' : 'flex h-full'}`}>
+      <div
+        ref={mainContentRef}
+        className="order-1 lg:order-2 w-full lg:flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden min-h-[60vh] lg:min-h-0"
+      >
         
         {/* State A: New Analysis Input */}
         {!selectedTask ? (
@@ -522,6 +537,7 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
                 <div className="relative flex items-center">
                   <Search className="absolute left-4 w-5 h-5 text-gray-400" />
                   <input
+                    ref={stockInputRef}
                     type="text"
                     value={stockCode}
                     onChange={(e) => handleStockCodeChange(e.target.value)}
