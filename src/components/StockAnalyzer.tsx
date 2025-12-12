@@ -40,7 +40,11 @@ interface AnalysisTask {
   completed_at?: string;
 }
 
-export default function StockAnalyzer() {
+interface StockAnalyzerProps {
+  onNeedLogin?: () => void;
+}
+
+export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) {
   const { token, user, refreshMe } = useAuth();
   
   // Core State
@@ -73,12 +77,15 @@ export default function StockAnalyzer() {
   const tasksRef = useRef<AnalysisTask[]>([]);
   const notifiedRef = useRef<Set<string>>(new Set());
 
-  // Notification Permission
-  const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>(() => {
-    if (typeof window === 'undefined') return 'unsupported';
-    if (typeof Notification === 'undefined') return 'unsupported';
-    return Notification.permission;
-  });
+  // Notification Permission - initialize as 'unsupported' to match SSR
+  const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('unsupported');
+
+  // Update notification permission on client side only
+  useEffect(() => {
+    if (typeof window !== 'undefined' && typeof Notification !== 'undefined') {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
 
   // --- Effects & Data Loading ---
 
@@ -239,7 +246,9 @@ export default function StockAnalyzer() {
     
     // Check if user is logged in
     if (!token || !user) {
-      alert('请先登录后再进行分析');
+      if (onNeedLogin) {
+        onNeedLogin();
+      }
       return;
     }
     
@@ -571,13 +580,7 @@ export default function StockAnalyzer() {
               </div>
 
               {/* User Info / Invite Code */}
-              {!user ? (
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 border border-yellow-200 dark:border-yellow-800">
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200 text-center">
-                    ⚠️ 需要登录后才能使用分析功能
-                  </p>
-                </div>
-              ) : (
+              {user && (
                 <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     当前积分: <span className="font-bold text-gray-900 dark:text-white">{user.points}</span>
@@ -607,7 +610,7 @@ export default function StockAnalyzer() {
                   </div>
                 </div>
               )}
-              {inviteMessage && <p className="text-center text-xs text-gray-400">{inviteMessage}</p>}
+              {user && inviteMessage && <p className="text-center text-xs text-gray-400">{inviteMessage}</p>}
             </div>
           </div>
         ) : (

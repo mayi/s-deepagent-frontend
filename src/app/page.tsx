@@ -116,25 +116,12 @@ export default function Home() {
               {!user && <Lock className="w-3 h-3 text-amber-500" />}
             </button>
           </div>
-          
-          {/* Guest Notice */}
-          {!user && (
-            <div className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-lg border border-amber-100 dark:border-amber-800/50 flex items-center gap-2">
-              <span>💡 未登录用户每日限 1 次分析</span>
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="text-blue-600 hover:underline font-medium"
-              >
-                立即登录
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Content Area - Fills remaining height */}
         <div className="flex-1 min-h-0 relative">
           {activeTab === 'analyzer' ? (
-            <StockAnalyzer />
+            <StockAnalyzer onNeedLogin={() => setShowAuthModal(true)} />
           ) : (
             <div className="h-full overflow-y-auto">
               <StockRadar />
