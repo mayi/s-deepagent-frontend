@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { 
-  Search, Loader2, CheckCircle2, XCircle, Clock, 
-  Trash2, RefreshCw, FileText, ArrowLeft, Bell, 
-  BellOff, Plus, ChevronRight, BarChart3, Sparkles
+import {
+  Search, Loader2, CheckCircle2, XCircle, Clock,
+  Trash2, RefreshCw, ArrowLeft, Bell,
+  BellOff, Plus, ChevronRight, BarChart3, Sparkles, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -46,12 +46,12 @@ interface StockAnalyzerProps {
 
 export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) {
   const { token, user, refreshMe } = useAuth();
-  
+
   // Core State
   const [tasks, setTasks] = useState<AnalysisTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<AnalysisTask | null>(null);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
-  
+
   // Input State
   const [stockCode, setStockCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,11 +59,11 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
   const [validation, setValidation] = useState<StockValidation | null>(null);
   const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  
+
   // Task Detail State
   const [taskResult, setTaskResult] = useState<string>('');
   const [taskProgress, setTaskProgress] = useState<TaskProgressItem[]>([]);
-  
+
   // Invite Code State
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteMessage, setInviteMessage] = useState<string>('');
@@ -98,13 +98,13 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
       setIsLoadingTasks(false);
       return;
     }
-    
+
     setIsLoadingTasks(true);
     try {
       const response = await fetch('/api/analyze/history', {
         headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
       });
-      
+
       if (!response.ok) {
         // Handle 401 Unauthorized
         if (response.status === 401) {
@@ -112,7 +112,7 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
           return;
         }
       }
-      
+
       const data = await response.json();
       if (data.success) {
         setTasks(data.tasks);
@@ -200,7 +200,7 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
       const statusData = await statusRes.json();
 
       setTaskProgress(Array.isArray(statusData.progress) ? statusData.progress : []);
-      
+
       if (statusData.status === 'completed') {
         const res = await fetch(`/api/analyze/result/${taskId}`, {
           headers: { ...(token && { 'Authorization': `Bearer ${token}` }) },
@@ -226,7 +226,7 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
   const handleDeleteTask = async (e: React.MouseEvent, taskId: string) => {
     e.stopPropagation();
     if (!confirm('确定删除此任务吗？')) return;
-    
+
     try {
       const response = await fetch(`/api/analyze/task/${taskId}`, {
         method: 'DELETE',
@@ -245,7 +245,7 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
 
   const submitAnalysisTask = async () => {
     if (!stockCode.trim()) return;
-    
+
     // Check if user is logged in
     if (!token || !user) {
       if (onNeedLogin) {
@@ -253,7 +253,7 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
       }
       return;
     }
-    
+
     // Validation logic
     if (!validation) {
       await validateStock(stockCode);
@@ -283,15 +283,15 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
         alert(data.detail || '积分不足');
         return;
       }
-      
+
       if (!response.ok) {
         alert(data.detail || '提交失败');
         return;
       }
 
       // Success
-      if (token) refreshMe().catch(() => {});
-      
+      if (token) refreshMe().catch(() => { });
+
       const newTask: AnalysisTask = {
         task_id: data.task_id,
         stock_code: data.stock_code,
@@ -299,13 +299,13 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
         status: 'pending',
         created_at: new Date().toISOString(),
       };
-      
+
       setTasks(prev => [newTask, ...prev]);
       setStockCode('');
       setValidation(null);
       handleSelectTask(newTask); // Auto-select the new task
       startPolling();
-      
+
     } catch (error) {
       alert('提交任务失败');
     } finally {
@@ -353,14 +353,14 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
     setValidation(null);
     if (validationTimeoutRef.current) clearTimeout(validationTimeoutRef.current);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    
+
     if (value.length >= 1) {
       searchTimeoutRef.current = setTimeout(() => searchStocks(value), 300);
     } else {
       setSearchResults([]);
       setShowSearchResults(false);
     }
-    
+
     if (value.length >= 6) {
       validationTimeoutRef.current = setTimeout(() => validateStock(value), 500);
     }
@@ -384,7 +384,7 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
     try {
       new Notification(title, { body: '点击查看详情' });
       notifiedRef.current.add(task.task_id);
-    } catch {}
+    } catch { }
   };
 
   const generateInvite = async () => {
@@ -413,129 +413,179 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
   // --- Render Helpers ---
 
   const getStatusBadge = (status: string) => {
-    const styles = {
-      pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-      running: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-      completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-      failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+    const config: Record<string, { bg: string; text: string; label: string }> = {
+      pending: { bg: 'bg-amber-400/15', text: 'text-amber-300', label: '等待中' },
+      running: { bg: 'bg-blue-400/15', text: 'text-blue-400', label: '分析中' },
+      completed: { bg: 'bg-jade-400/15', text: 'text-jade-400', label: '已完成' },
+      failed: { bg: 'bg-coral-400/15', text: 'text-coral-400', label: '失败' },
     };
-    const labels = { pending: "等待中", running: "分析中", completed: "已完成", failed: "失败" };
-    // @ts-ignore
-    return <span className={`px-2 py-0.5 text-xs rounded-full ${styles[status] || ''}`}>{labels[status] || status}</span>;
+    const c = config[status] || config.pending;
+    return (
+      <span className={`px-2.5 py-1 text-xs font-mono font-semibold rounded-full ${c.bg} ${c.text}`}>
+        {c.label}
+      </span>
+    );
   };
 
   // --- Main Render ---
 
   return (
     <div className="w-full flex flex-col lg:flex-row gap-6 lg:h-full lg:overflow-hidden">
-      
-      {/* Sidebar: Task List (mobile 下放后面展示) */}
-      <div className="order-2 lg:order-1 w-full lg:w-1/3 xl:w-1/4 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden lg:h-full">
+
+      {/* Sidebar: Task List */}
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="order-2 lg:order-1 w-full lg:w-1/3 xl:w-1/4 flex flex-col card overflow-hidden lg:h-full"
+      >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50">
-          <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-blue-500" />
+        <div className="p-4 border-b border-ink-600 flex items-center justify-between bg-ink-700/50">
+          <h2 className="font-semibold text-ink-100 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-amber-400" />
             分析列表
           </h2>
-          <button 
+          <motion.button
             onClick={(e) => {
               e.stopPropagation();
-              // 始终切换到新建分析，并滚动到输入区域 + 聚焦输入框（移动端更友好）
               setSelectedTask(null);
               if (mainContentRef.current) {
                 mainContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
               } else {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }
-              // 延迟聚焦以等待布局切换完成
               setTimeout(() => {
                 stockInputRef.current?.focus();
               }, 150);
             }}
-            className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors shadow-sm"
+            className="p-2 rounded-xl transition-all"
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
+            }}
             title="新分析"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
-            <Plus className="w-5 h-5" />
-          </button>
+            <Plus className="w-5 h-5 text-ink-900" />
+          </motion.button>
         </div>
 
         {/* Task List */}
         <div className="p-3 space-y-2 lg:flex-1 lg:overflow-y-auto">
           {isLoadingTasks ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
+            </div>
           ) : tasks.length === 0 ? (
-            <div className="text-center py-10 text-gray-400">
+            <div className="text-center py-10 text-ink-400">
+              <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p className="text-sm">暂无历史记录</p>
             </div>
           ) : (
-            tasks.map(task => (
-              <div
+            tasks.map((task, index) => (
+              <motion.div
                 key={task.task_id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
                 onClick={() => handleSelectTask(task)}
-                className={`group p-3 rounded-xl border transition-all cursor-pointer hover:shadow-md ${
-                  selectedTask?.task_id === task.task_id
-                    ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
-                    : 'bg-white border-gray-100 dark:bg-gray-800 dark:border-gray-700 hover:border-blue-100 dark:hover:border-gray-600'
-                }`}
+                className={`group p-3 rounded-xl border transition-all cursor-pointer ${selectedTask?.task_id === task.task_id
+                    ? 'bg-amber-400/10 border-amber-500/30'
+                    : 'bg-ink-800/50 border-ink-600 hover:border-amber-500/20 hover:bg-ink-700/50'
+                  }`}
               >
-                <div className="flex justify-between items-start mb-1">
-                  <div className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <div className="flex justify-between items-start mb-1.5">
+                  <div className="font-medium text-ink-100 flex items-center gap-2 truncate">
                     {task.stock_name || task.stock_code}
                   </div>
                   {getStatusBadge(task.status)}
                 </div>
-                <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
-                  <span className="font-mono">{task.stock_code}</span>
+                <div className="flex justify-between items-center text-xs text-ink-400">
+                  <span className="font-mono text-amber-400/70">{task.stock_code}</span>
                   <div className="flex items-center gap-2">
                     <span>{new Date(task.created_at).toLocaleDateString()}</span>
-                    <button 
+                    <motion.button
                       onClick={(e) => handleDeleteTask(e, task.task_id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-coral-400 transition-all"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                     >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </motion.button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))
           )}
         </div>
-        
-        {/* Notification Toggle (Bottom of Sidebar) */}
-        <div className="p-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-800/30">
-           <button
+
+        {/* Notification Toggle */}
+        <div className="p-3 border-t border-ink-600 bg-ink-800/30">
+          <button
             onClick={requestNotificationPermission}
-            className="w-full flex items-center justify-center gap-2 text-xs text-gray-500 hover:text-blue-600 transition-colors py-2"
+            className="w-full flex items-center justify-center gap-2 text-xs text-ink-400 hover:text-amber-400 transition-colors py-2 rounded-lg hover:bg-ink-700/50"
           >
-            {notificationPermission === 'granted' ? <Bell className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+            {notificationPermission === 'granted' ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
             {notificationPermission === 'granted' ? '通知已开启' : '开启完成通知'}
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Main Content Area */}
-      <div
+      <motion.div
         ref={mainContentRef}
-        className="order-1 lg:order-2 w-full lg:flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden min-h-[60vh] lg:min-h-0"
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="order-1 lg:order-2 w-full lg:flex-1 flex flex-col card overflow-hidden min-h-[60vh] lg:min-h-0"
       >
-        
+
         {/* State A: New Analysis Input */}
         {!selectedTask ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-2xl mx-auto w-full">
             <div className="w-full space-y-8">
-              <div className="text-center space-y-2">
-                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                  <Sparkles className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-                </div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">开始新的分析</h1>
-                <p className="text-gray-500 dark:text-gray-400">输入股票代码，AI 代理将为您生成深度投资报告</p>
-              </div>
+              {/* Hero Section */}
+              <motion.div
+                className="text-center space-y-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <motion.div
+                  className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto relative overflow-hidden"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(249, 115, 22, 0.1) 100%)',
+                    border: '1px solid rgba(251, 191, 36, 0.3)',
+                  }}
+                  animate={{
+                    boxShadow: [
+                      '0 0 0 0 rgba(251, 191, 36, 0)',
+                      '0 0 30px 10px rgba(251, 191, 36, 0.15)',
+                      '0 0 0 0 rgba(251, 191, 36, 0)',
+                    ]
+                  }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <Sparkles className="w-10 h-10 text-amber-400" />
+                </motion.div>
+                <h1 className="text-3xl font-bold text-ink-100 font-display">开始新的分析</h1>
+                <p className="text-ink-400">输入股票代码，AI 代理将为您生成深度投资报告</p>
+              </motion.div>
 
               {/* Search Box */}
-              <div className="relative group" ref={searchInputRef}>
-                <div className={`absolute inset-0 bg-blue-500/5 rounded-2xl blur-xl transition-opacity ${isSubmitting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+              <motion.div
+                className="relative group"
+                ref={searchInputRef}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                {/* Glow effect */}
+                <div className={`absolute -inset-1 rounded-2xl blur-xl transition-opacity duration-500 ${isSubmitting ? 'opacity-100' : 'opacity-0 group-focus-within:opacity-100'
+                  }`} style={{ background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(249, 115, 22, 0.1) 100%)' }} />
+
                 <div className="relative flex items-center">
-                  <Search className="absolute left-4 w-5 h-5 text-gray-400" />
+                  <Search className="absolute left-4 w-5 h-5 text-ink-400" />
                   <input
                     ref={stockInputRef}
                     type="text"
@@ -544,19 +594,30 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
                     onKeyDown={(e) => e.key === 'Enter' && submitAnalysisTask()}
                     onFocus={() => stockCode.length >= 1 && searchResults.length > 0 && setShowSearchResults(true)}
                     placeholder="输入代码或名称 (如: 000001, 平安银行)"
-                    className="w-full pl-12 pr-32 py-4 text-lg bg-white dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-blue-500 focus:ring-0 transition-all shadow-sm"
+                    className="input w-full pl-12 pr-36 py-4 text-lg"
                   />
                   <div className="absolute right-2 flex items-center gap-2">
-                    {isValidating && <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />}
-                    {validation?.valid && <CheckCircle2 className="w-5 h-5 text-green-500" />}
-                    <button
+                    {isValidating && <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />}
+                    {validation?.valid && <CheckCircle2 className="w-5 h-5 text-jade-400" />}
+                    <motion.button
                       onClick={submitAnalysisTask}
                       disabled={isSubmitting || (validation !== null && !validation.valid)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="btn-primary flex items-center gap-2"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                     >
-                      {isSubmitting ? '分析中...' : '开始'}
-                      {!isSubmitting && <ChevronRight className="w-4 h-4" />}
-                    </button>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          分析中
+                        </>
+                      ) : (
+                        <>
+                          开始
+                          <ChevronRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </motion.button>
                   </div>
                 </div>
 
@@ -567,7 +628,7 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-20"
+                      className="absolute top-full left-0 right-0 mt-2 bg-ink-700 rounded-xl shadow-float border border-ink-600 overflow-hidden z-20"
                     >
                       {searchResults.map((stock) => (
                         <button
@@ -577,39 +638,56 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
                             setShowSearchResults(false);
                             setValidation({ valid: true, message: '有效', stock_name: stock.name, stock_code: stock.code });
                           }}
-                          className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex justify-between items-center group/item"
+                          className="w-full px-4 py-3 text-left hover:bg-ink-600 flex justify-between items-center group/item transition-colors"
                         >
-                          <span className="font-medium text-gray-900 dark:text-white">{stock.name}</span>
-                          <span className="font-mono text-sm text-gray-500 group-hover/item:text-blue-500">{stock.code}</span>
+                          <span className="font-medium text-ink-100">{stock.name}</span>
+                          <span className="font-mono text-sm text-ink-400 group-hover/item:text-amber-400">{stock.code}</span>
                         </button>
                       ))}
                     </motion.div>
                   )}
                 </AnimatePresence>
-                
+
                 {/* Validation Message */}
                 {validation && !validation.valid && (
-                  <div className="absolute top-full left-0 mt-2 text-sm text-red-500 flex items-center gap-1">
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="absolute top-full left-0 mt-2 text-sm text-coral-400 flex items-center gap-1"
+                  >
                     <XCircle className="w-4 h-4" /> {validation.message}
-                  </div>
+                  </motion.div>
                 )}
-              </div>
+              </motion.div>
 
               {/* User Info / Invite Code */}
               {user && (
-                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    当前积分: <span className="font-bold text-gray-900 dark:text-white">{user.points}</span>
-                    <span className="mx-2">|</span>
-                    每次分析消耗 100 积分
+                <motion.div
+                  className="rounded-xl p-4 border flex flex-col sm:flex-row items-center justify-between gap-4"
+                  style={{
+                    background: 'rgba(26, 26, 37, 0.6)',
+                    borderColor: 'rgba(37, 37, 50, 0.8)',
+                  }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                >
+                  <div className="text-sm text-ink-300 flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-amber-400" />
+                      <span>当前积分:</span>
+                      <span className="font-bold font-mono text-amber-400">{user.points}</span>
+                    </div>
+                    <span className="text-ink-500">|</span>
+                    <span className="text-ink-400">每次分析消耗 100 积分</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {inviteCode ? (
-                      <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <span className="font-mono text-sm">{inviteCode}</span>
-                        <button 
+                      <div className="flex items-center gap-2 bg-ink-800 px-3 py-1.5 rounded-lg border border-ink-600">
+                        <span className="font-mono text-sm text-amber-300">{inviteCode}</span>
+                        <button
                           onClick={() => navigator.clipboard.writeText(inviteCode).then(() => setInviteMessage('已复制'))}
-                          className="text-xs text-blue-500 hover:underline"
+                          className="text-xs text-amber-400 hover:text-amber-300 font-medium"
                         >
                           复制
                         </button>
@@ -618,35 +696,39 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
                       <button
                         onClick={generateInvite}
                         disabled={isGeneratingInvite}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                        className="text-sm text-amber-400 hover:text-amber-300 font-medium disabled:opacity-50"
                       >
                         {isGeneratingInvite ? '生成中...' : '生成邀请码'}
                       </button>
                     )}
                   </div>
-                </div>
+                </motion.div>
               )}
-              {user && inviteMessage && <p className="text-center text-xs text-gray-400">{inviteMessage}</p>}
+              {user && inviteMessage && (
+                <p className="text-center text-xs text-ink-500">{inviteMessage}</p>
+              )}
             </div>
           </div>
         ) : (
           /* State B: Task Detail View */
           <div className="flex flex-col h-full">
             {/* Detail Header */}
-            <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-800">
+            <div className="p-4 border-b border-ink-600 flex items-center justify-between bg-ink-700/50">
               <div className="flex items-center gap-3">
-                <button 
+                <motion.button
                   onClick={() => setSelectedTask(null)}
-                  className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  className="lg:hidden p-2 hover:bg-ink-600 rounded-xl text-ink-300 hover:text-ink-100 transition-colors"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
                   <ArrowLeft className="w-5 h-5" />
-                </button>
+                </motion.button>
                 <div>
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-ink-100 flex items-center gap-2">
                     {selectedTask.stock_name}
-                    <span className="text-sm font-normal text-gray-500 font-mono">({selectedTask.stock_code})</span>
+                    <span className="text-sm font-normal text-amber-400/70 font-mono">({selectedTask.stock_code})</span>
                   </h2>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <div className="flex items-center gap-2 text-xs text-ink-400">
                     <Clock className="w-3 h-3" />
                     {new Date(selectedTask.created_at).toLocaleString()}
                   </div>
@@ -654,75 +736,119 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
               </div>
               <div className="flex items-center gap-2">
                 {getStatusBadge(selectedTask.status)}
-                <button 
+                <motion.button
                   onClick={() => refreshSelectedTask(selectedTask.task_id)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-500"
+                  className="p-2 hover:bg-ink-600 rounded-xl text-ink-400 hover:text-amber-400 transition-colors"
                   title="刷新"
+                  whileHover={{ scale: 1.05, rotate: 180 }}
+                  whileTap={{ scale: 0.95 }}
                 >
                   <RefreshCw className="w-4 h-4" />
-                </button>
+                </motion.button>
               </div>
             </div>
 
             {/* Detail Content */}
-            <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30 dark:bg-gray-900/30">
+            <div className="flex-1 overflow-y-auto p-6 bg-ink-800/30">
               {selectedTask.status === 'pending' && (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-                  <Clock className="w-12 h-12 mb-4 text-yellow-400" />
-                  <p>任务排队中...</p>
-                </div>
+                <motion.div
+                  className="flex flex-col items-center justify-center h-64 text-ink-400"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                  >
+                    <Clock className="w-16 h-16 mb-4 text-amber-400/50" />
+                  </motion.div>
+                  <p className="text-lg font-medium">任务排队中...</p>
+                </motion.div>
               )}
 
               {selectedTask.status === 'running' && (
                 <div className="max-w-2xl mx-auto">
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="w-12 h-12 mb-4 text-blue-500 animate-spin" />
-                    <p className="text-lg font-medium text-gray-700 dark:text-gray-300">AI 代理正在深度分析...</p>
-                    <p className="text-sm text-gray-500 mt-2">这通常需要 1-2 分钟，您可以稍后查看</p>
-                  </div>
+                  <motion.div
+                    className="flex flex-col items-center justify-center py-12"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <motion.div
+                      animate={{
+                        scale: [1, 1.1, 1],
+                        opacity: [0.5, 1, 0.5],
+                      }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      <Loader2 className="w-16 h-16 mb-4 text-amber-400 animate-spin" />
+                    </motion.div>
+                    <p className="text-lg font-medium text-ink-200">AI 代理正在深度分析...</p>
+                    <p className="text-sm text-ink-400 mt-2">这通常需要 1-2 分钟，您可以稍后查看</p>
+                  </motion.div>
+
                   {/* Live Logs */}
-                  <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm max-h-60 overflow-y-auto">
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">执行日志</h3>
+                  <motion.div
+                    className="bg-ink-800 rounded-xl p-4 border border-ink-600 max-h-60 overflow-y-auto"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Zap className="w-3 h-3 text-amber-400" />
+                      执行日志
+                    </h3>
                     <div className="space-y-3">
                       {taskProgress.map((p, i) => (
-                        <div key={i} className="flex gap-3 text-sm">
-                          <span className="text-gray-400 font-mono text-xs whitespace-nowrap">
+                        <motion.div
+                          key={i}
+                          className="flex gap-3 text-sm"
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.1 }}
+                        >
+                          <span className="text-ink-500 font-mono text-xs whitespace-nowrap">
                             {p.timestamp ? new Date(p.timestamp).toLocaleTimeString() : ''}
                           </span>
-                          <span className="text-gray-700 dark:text-gray-300">{p.message}</span>
-                        </div>
+                          <span className="text-ink-300">{p.message}</span>
+                        </motion.div>
                       ))}
-                      {taskProgress.length === 0 && <p className="text-sm text-gray-400 italic">等待代理启动...</p>}
+                      {taskProgress.length === 0 && (
+                        <p className="text-sm text-ink-500 italic">等待代理启动...</p>
+                      )}
                     </div>
-                  </div>
+                  </motion.div>
                 </div>
               )}
 
               {selectedTask.status === 'failed' && (
-                <div className="flex flex-col items-center justify-center h-64 text-red-500">
-                  <XCircle className="w-12 h-12 mb-4" />
-                  <p className="font-medium">分析失败</p>
-                  <p className="text-sm mt-2 text-gray-500">{selectedTask.error_message}</p>
-                </div>
+                <motion.div
+                  className="flex flex-col items-center justify-center h-64 text-coral-400"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  <XCircle className="w-16 h-16 mb-4" />
+                  <p className="font-medium text-lg">分析失败</p>
+                  <p className="text-sm mt-2 text-ink-400">{selectedTask.error_message}</p>
+                </motion.div>
               )}
 
               {selectedTask.status === 'completed' && taskResult && (
-                <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-8 border border-gray-100 dark:border-gray-700">
-                  <article className="prose prose-slate dark:prose-invert max-w-none 
-                    prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h2:border-b prose-h2:pb-2 prose-h2:mt-8
-                    prose-p:text-gray-600 dark:prose-p:text-gray-300 prose-p:leading-relaxed
-                    prose-strong:text-gray-900 dark:prose-strong:text-white
-                    prose-li:text-gray-600 dark:prose-li:text-gray-300">
+                <motion.div
+                  className="max-w-4xl mx-auto bg-ink-700 rounded-2xl shadow-card p-8 border border-ink-600"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <article className="prose max-w-none">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {taskResult}
                     </ReactMarkdown>
                   </article>
-                </div>
+                </motion.div>
               )}
             </div>
           </div>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }
