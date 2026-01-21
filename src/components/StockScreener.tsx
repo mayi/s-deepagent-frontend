@@ -20,8 +20,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
-// API 基础地址
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// 去掉 API_BASE，使用相对路径
+// const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface Pattern {
     name: string;
@@ -78,7 +78,7 @@ export default function StockScreener() {
     useEffect(() => {
         const fetchPatterns = async () => {
             try {
-                const res = await fetch(`${API_BASE}/api/screener/patterns`);
+                const res = await fetch(`/api/screener/patterns`);
                 const data = await res.json();
                 if (data.success && data.patterns) {
                     setPatterns(data.patterns);
@@ -107,7 +107,7 @@ export default function StockScreener() {
 
         try {
             const response = await fetch(
-                `${API_BASE}/api/screener/run?pattern=${selectedPattern}`,
+                `/api/screener/run?pattern=${selectedPattern}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -181,7 +181,7 @@ export default function StockScreener() {
         try {
             // 获取K线数据
             const codes = matchedStocks.map(s => s.code);
-            const response = await fetch(`${API_BASE}/api/screener/kline/batch`, {
+            const response = await fetch(`/api/screener/kline/batch`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
