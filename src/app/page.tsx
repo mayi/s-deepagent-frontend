@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import StockAnalyzer from '@/components/StockAnalyzer';
 import StockRadar from '@/components/StockRadar';
+import StockScreener from '@/components/StockScreener';
 import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { TrendingUp, User, LogOut, Lock, Sparkles, Coins } from 'lucide-react';
+import { TrendingUp, User, LogOut, Lock, Sparkles, Coins, Filter } from 'lucide-react';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'analyzer' | 'radar'>('analyzer');
+  const [activeTab, setActiveTab] = useState<'analyzer' | 'radar' | 'screener'>('analyzer');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { user, isLoading, logout } = useAuth();
 
@@ -19,6 +20,14 @@ export default function Home() {
       setShowAuthModal(true);
     } else {
       setActiveTab('radar');
+    }
+  };
+
+  const handleScreenerClick = () => {
+    if (!user) {
+      setShowAuthModal(true);
+    } else {
+      setActiveTab('screener');
     }
   };
 
@@ -140,8 +149,8 @@ export default function Home() {
             <motion.button
               onClick={() => setActiveTab('analyzer')}
               className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors ${activeTab === 'analyzer'
-                  ? 'text-ink-900'
-                  : 'text-ink-300 hover:text-ink-100'
+                ? 'text-ink-900'
+                : 'text-ink-300 hover:text-ink-100'
                 }`}
               whileHover={{ scale: activeTab === 'analyzer' ? 1 : 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -163,8 +172,8 @@ export default function Home() {
             <motion.button
               onClick={handleRadarClick}
               className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 ${activeTab === 'radar'
-                  ? 'text-ink-900'
-                  : 'text-ink-300 hover:text-ink-100'
+                ? 'text-ink-900'
+                : 'text-ink-300 hover:text-ink-100'
                 }`}
               whileHover={{ scale: activeTab === 'radar' ? 1 : 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -184,6 +193,32 @@ export default function Home() {
                 <Lock className="relative z-10 w-3.5 h-3.5 text-amber-400" />
               )}
             </motion.button>
+
+            {/* 量化选股 Tab */}
+            <motion.button
+              onClick={handleScreenerClick}
+              className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 ${activeTab === 'screener'
+                ? 'text-ink-900'
+                : 'text-ink-300 hover:text-ink-100'
+                }`}
+              whileHover={{ scale: activeTab === 'screener' ? 1 : 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {activeTab === 'screener' && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                  }}
+                  transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <span className="relative z-10">量化选股</span>
+              {!user && (
+                <Lock className="relative z-10 w-3.5 h-3.5 text-amber-400" />
+              )}
+            </motion.button>
           </div>
         </motion.div>
 
@@ -196,9 +231,13 @@ export default function Home() {
         >
           {activeTab === 'analyzer' ? (
             <StockAnalyzer onNeedLogin={() => setShowAuthModal(true)} />
-          ) : (
+          ) : activeTab === 'radar' ? (
             <div className="h-full overflow-y-auto">
               <StockRadar />
+            </div>
+          ) : (
+            <div className="h-full overflow-y-auto">
+              <StockScreener />
             </div>
           )}
         </motion.div>
