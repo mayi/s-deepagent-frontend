@@ -17,6 +17,7 @@ import {
     Target,
     Lock,
     Download,
+    X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -355,6 +356,106 @@ export default function StockScreener() {
     // 当前选中的公式
     const currentPattern = patterns.find((p) => p.name === selectedPattern);
 
+    // K线弹窗状态
+    const [chartModalStock, setChartModalStock] = useState<MatchedStock | null>(null);
+    const [chartKlineData, setChartKlineData] = useState<KlineData[]>([]);
+    const [isLoadingChart, setIsLoadingChart] = useState(false);
+    const chartContainerRef = useRef<HTMLDivElement>(null);
+
+    // 打开K线弹窗
+    const openChartModal = async (stock: MatchedStock) => {
+        setChartModalStock(stock);
+        setIsLoadingChart(true);
+        setChartKlineData([]);
+
+        const token = localStorage.getItem('auth_token');
+        try {
+            const response = await fetch(`/api/screener/kline/batch`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ codes: [stock.code], days: 60 }),
+            });
+            const { data } = await response.json();
+            if (data && data[stock.code]) {
+                setChartKlineData(data[stock.code]);
+            }
+        } catch (err) {
+            console.error('获取K线数据失败:', err);
+        } finally {
+            setIsLoadingChart(false);
+        }
+    };
+
+    // 渲染ECharts
+    useEffect(() => {
+        if (!chartModalStock || chartKlineData.length === 0 || !chartContainerRef.current) return;
+
+        // 动态导入 ECharts
+        import('echarts').then((echarts) => {
+            const chart = echarts.init(chartContainerRef.current!, 'dark');
+
+            const dates = chartKlineData.map((k) => k.date);
+            const ohlc = chartKlineData.map((k) => [k.open, k.close, k.low, k.high]);
+            const volumes = chartKlineData.map((k) => k.volume);
+
+            // 标记大阳日和信号日
+            const baseIdx = dates.indexOf(chartModalStock.base_date);
+            const signalIdx = dates.indexOf(chartModalStock.signal_date);
+
+            const markPoints: any[] = [];
+            if (baseIdx >= 0) markPoints.push({ coord: [baseIdx, chartKlineData[baseIdx].high], value: '大阳', itemStyle: { color: '#f87171' } });
+            if (signalIdx >= 0) markPoints.push({ coord: [signalIdx, chartKlineData[signalIdx].high], value: '信号', itemStyle: { color: '#4ade80' } });
+
+            chart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+                grid: [
+                    { left: 60, right: 30, top: 40, height: '55%' },
+                    { left: 60, right: 30, top: '72%', height: '18%' },
+                ],
+                xAxis: [
+                    { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },
+                    { type: 'category', data: dates, gridIndex: 1 },
+                ],
+                yAxis: [
+                    { scale: true, gridIndex: 0, splitLine: { lineStyle: { color: '#334155' } } },
+                    { scale: true, gridIndex: 1, splitLine: { show: false } },
+                ],
+                series: [
+                    {
+                        name: 'K线',
+                        type: 'candlestick',
+                        data: ohlc,
+                        xAxisIndex: 0,
+                        yAxisIndex: 0,
+                        itemStyle: { color: '#f87171', color0: '#4ade80', borderColor: '#f87171', borderColor0: '#4ade80' },
+                        markPoint: { data: markPoints, symbol: 'pin', symbolSize: 40, label: { color: '#fff' } },
+                    },
+                    {
+                        name: '成交量',
+                        type: 'bar',
+                        data: volumes,
+                        xAxisIndex: 1,
+                        yAxisIndex: 1,
+                        itemStyle: { color: '#64748b' },
+                    },
+                ],
+            });
+
+            // 响应窗口变化
+            const handleResize = () => chart.resize();
+            window.addEventListener('resize', handleResize);
+
+            return () => {
+                window.removeEventListener('resize', handleResize);
+                chart.dispose();
+            };
+        });
+    }, [chartModalStock, chartKlineData]);
+
     // 未登录状态
     if (!user) {
         return (
@@ -553,6 +654,7 @@ export default function StockScreener() {
                                             initial={{ opacity: 0, x: -20 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             transition={{ delay: index * 0.05 }}
+                                            onClick={() => openChartModal(stock)}
                                             className="p-4 bg-ink-800/60 rounded-xl border border-ink-600/50 hover:border-jade-500/30 transition-colors group cursor-pointer"
                                         >
                                             <div className="flex items-center justify-between">
@@ -589,6 +691,83 @@ export default function StockScreener() {
                                 </div>
                             </div>
                         )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* K线弹窗 */}
+            <AnimatePresence>
+                {chartModalStock && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                        onClick={() => setChartModalStock(null)}
+                    >
+                        {/* 背景遮罩 */}
+                        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+
+                        {/* Modal 内容 */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="relative w-full max-w-4xl bg-ink-800 rounded-2xl border border-ink-600 shadow-2xl overflow-hidden"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-4 border-b border-ink-600">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-jade-500/10">
+                                        <TrendingUp className="w-5 h-5 text-jade-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-ink-100">
+                                            {chartModalStock.code} {chartModalStock.name}
+                                        </h3>
+                                        <p className="text-sm text-ink-400">
+                                            大阳日: {chartModalStock.base_date} → 信号日: {chartModalStock.signal_date}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setChartModalStock(null)}
+                                    className="p-2 rounded-lg hover:bg-ink-700 text-ink-400 hover:text-ink-200 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Chart Area */}
+                            <div className="p-4">
+                                {isLoadingChart ? (
+                                    <div className="flex items-center justify-center h-96">
+                                        <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+                                    </div>
+                                ) : chartKlineData.length === 0 ? (
+                                    <div className="flex items-center justify-center h-96 text-ink-400">
+                                        暂无K线数据
+                                    </div>
+                                ) : (
+                                    <div ref={chartContainerRef} className="w-full h-96" />
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            {chartModalStock.details?.big_yang_gain && (
+                                <div className="px-4 pb-4">
+                                    <div className="flex items-center gap-4 p-3 bg-ink-700/50 rounded-xl">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm text-ink-400">大阳涨幅:</span>
+                                            <span className="text-lg font-bold text-coral-400 font-mono">
+                                                +{chartModalStock.details.big_yang_gain}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
