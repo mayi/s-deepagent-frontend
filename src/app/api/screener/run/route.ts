@@ -8,10 +8,16 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const pattern = searchParams.get('pattern');
+    const params = searchParams.get('params');
 
     if (!pattern) return new Response('Missing pattern', { status: 400 });
 
-    const response = await fetch(`${API_URL}/api/screener/run?pattern=${pattern}`, {
+    let backendUrl = `${API_URL}/api/screener/run?pattern=${pattern}`;
+    if (params) {
+        backendUrl += `&params=${encodeURIComponent(params)}`;
+    }
+
+    const response = await fetch(backendUrl, {
         headers: {
             'Authorization': auth,
         },

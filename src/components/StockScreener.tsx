@@ -18,6 +18,8 @@ import {
     Lock,
     Download,
     X,
+    RotateCcw,
+    ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -73,6 +75,9 @@ export default function StockScreener() {
     const [progress, setProgress] = useState<ScreenerProgress | null>(null);
     const [matchedStocks, setMatchedStocks] = useState<MatchedStock[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [scanCompleted, setScanCompleted] = useState(false);
+    const [customParams, setCustomParams] = useState<Record<string, any>>({});
+    const [showParams, setShowParams] = useState(false);
     const abortControllerRef = useRef<AbortController | null>(null);
 
     // 获取选股公式列表
@@ -94,6 +99,28 @@ export default function StockScreener() {
         fetchPatterns();
     }, []);
 
+    // 当选中的公式变化时，初始化参数为默认值
+    useEffect(() => {
+        const pat = patterns.find((p) => p.name === selectedPattern);
+        if (pat) {
+            const defaults: Record<string, any> = {};
+            pat.params.forEach((p) => { defaults[p.name] = p.default; });
+            setCustomParams(defaults);
+        }
+    }, [selectedPattern, patterns]);
+
+    // 重置参数为默认值
+    const resetParams = () => {
+        const pat = patterns.find((p) => p.name === selectedPattern);
+        if (pat) {
+            const defaults: Record<string, any> = {};
+            pat.params.forEach((p) => { defaults[p.name] = p.default; });
+            setCustomParams(defaults);
+        }
+    };
+
+    const currentPattern = patterns.find((p) => p.name === selectedPattern);
+
     // 开始选股
     const startScreener = async () => {
         if (!selectedPattern || !user) return;
@@ -102,13 +129,17 @@ export default function StockScreener() {
         setError(null);
         setMatchedStocks([]);
         setProgress({ current: 0, total: 0 });
+        setScanCompleted(false);
 
         const token = localStorage.getItem('auth_token');
         abortControllerRef.current = new AbortController();
 
         try {
+            const paramsStr = Object.keys(customParams).length > 0
+                ? `&params=${encodeURIComponent(JSON.stringify(customParams))}`
+                : '';
             const response = await fetch(
-                `/api/screener/run?pattern=${selectedPattern}`,
+                `/api/screener/run?pattern=${selectedPattern}${paramsStr}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -158,6 +189,7 @@ export default function StockScreener() {
             }
         } finally {
             setIsRunning(false);
+            setScanCompleted(true);
         }
     };
 
@@ -257,11 +289,11 @@ export default function StockScreener() {
         <div class="stock-header">
             <div class="stock-info">
                 <h2>${stock.code} ${stock.name}</h2>
-                <span>大阳日: ${stock.base_date} → 信号日: ${stock.signal_date}</span>
+                <span>${stock.base_date} → ${stock.signal_date}</span>
             </div>
             <div class="stock-meta">
-                ${stock.details?.big_yang_gain ? `<div class="gain">+${stock.details.big_yang_gain}%</div>` : ''}
-                <div class="label">大阳涨幅</div>
+                ${stock.details?.big_yang_gain ? `<div class="gain">+${stock.details.big_yang_gain}%</div><div class="label">大阳涨幅</div>` : ''}
+                ${stock.details?.total_gain ? `<div class="gain">+${stock.details.total_gain}%</div><div class="label">${stock.details.consecutive_days || ''}天量价齐升</div>` : ''}
             </div>
         </div>
         <div class="chart" id="chart-${index}"></div>
@@ -352,9 +384,6 @@ export default function StockScreener() {
             setIsExporting(false);
         }
     };
-
-    // 当前选中的公式
-    const currentPattern = patterns.find((p) => p.name === selectedPattern);
 
     // K线弹窗状态
     const [chartModalStock, setChartModalStock] = useState<MatchedStock | null>(null);
@@ -551,6 +580,131 @@ export default function StockScreener() {
                     ))}
                 </div>
 
+                {/* 参数调整区 */}
+                {currentPattern && currentPattern.params.length > 0 && (
+                    <div className="mt-4">
+                        <motion.button
+                            onClick={() => setShowParams(!showParams)}
+                            className="flex items-center gap-2 text-sm text-ink-400 hover:text-ink-200 transition-colors mb-3"
+                        >
+                            <Settings className="w-4 h-4" />
+                            <span>参数调整</span>
+                            <motion.div animate={{ rotate: showParams ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                                <ChevronDown className="w-4 h-4" />
+                            </motion.div>
+                        </motion.button>
+
+                        <AnimatePresence>
+                            {showParams && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.25 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="p-4 bg-ink-800/60 rounded-xl border border-ink-600/40 space-y-5">
+                                        {currentPattern.params.map((param) => (
+                                            <div key={param.name}>
+                                                {param.type === 'bool' ? (
+                                                    /* 布尔型：开关 */
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <span className="text-sm font-medium text-ink-200">{param.label}</span>
+                                                            {param.description && (
+                                                                <p className="text-xs text-ink-500 mt-0.5">{param.description}</p>
+                                                            )}
+                                                        </div>
+                                                        <button
+                                                            onClick={() =>
+                                                                setCustomParams((prev) => ({ ...prev, [param.name]: !prev[param.name] }))
+                                                            }
+                                                            className={`relative w-11 h-6 rounded-full transition-colors ${customParams[param.name]
+                                                                ? 'bg-amber-500/60'
+                                                                : 'bg-ink-600'
+                                                                }`}
+                                                        >
+                                                            <motion.div
+                                                                className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
+                                                                animate={{ left: customParams[param.name] ? '22px' : '2px' }}
+                                                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                                            />
+                                                        </button>
+                                                    </div>
+                                                ) : (param.type === 'int' || param.type === 'float') && param.min_value != null && param.max_value != null ? (
+                                                    /* 数值型（有范围）：滑块 */
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <span className="text-sm font-medium text-ink-200">{param.label}</span>
+                                                            <span className="text-sm font-mono text-amber-400 font-semibold">
+                                                                {customParams[param.name] ?? param.default}
+                                                                {param.label.includes('%') ? '%' : ''}
+                                                            </span>
+                                                        </div>
+                                                        {param.description && (
+                                                            <p className="text-xs text-ink-500 mb-2">{param.description}</p>
+                                                        )}
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-xs text-ink-500 font-mono w-8 text-right">{param.min_value}</span>
+                                                            <input
+                                                                type="range"
+                                                                min={param.min_value}
+                                                                max={param.max_value}
+                                                                step={param.type === 'int' ? 1 : 0.1}
+                                                                value={customParams[param.name] ?? param.default}
+                                                                onChange={(e) => {
+                                                                    const val = param.type === 'int'
+                                                                        ? parseInt(e.target.value)
+                                                                        : parseFloat(e.target.value);
+                                                                    setCustomParams((prev) => ({ ...prev, [param.name]: val }));
+                                                                }}
+                                                                className="flex-1 h-1.5 rounded-full appearance-none bg-ink-600 accent-amber-500 cursor-pointer
+                                                                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                                                                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-400
+                                                                    [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer"
+                                                            />
+                                                            <span className="text-xs text-ink-500 font-mono w-8">{param.max_value}</span>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    /* 其他类型：文本输入 */
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <span className="text-sm font-medium text-ink-200">{param.label}</span>
+                                                        </div>
+                                                        {param.description && (
+                                                            <p className="text-xs text-ink-500 mb-2">{param.description}</p>
+                                                        )}
+                                                        <input
+                                                            type="text"
+                                                            value={customParams[param.name] ?? param.default}
+                                                            onChange={(e) =>
+                                                                setCustomParams((prev) => ({ ...prev, [param.name]: e.target.value }))
+                                                            }
+                                                            className="w-full px-3 py-1.5 bg-ink-700/80 border border-ink-600 rounded-lg text-sm text-ink-200 focus:outline-none focus:border-amber-500/50"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+
+                                        {/* 恢复默认 */}
+                                        <div className="pt-2 border-t border-ink-600/40">
+                                            <button
+                                                onClick={resetParams}
+                                                className="flex items-center gap-1.5 text-xs text-ink-400 hover:text-amber-400 transition-colors"
+                                            >
+                                                <RotateCcw className="w-3.5 h-3.5" />
+                                                恢复默认参数
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                )}
+
                 {/* 开始按钮 */}
                 <div className="mt-6 flex gap-3">
                     {!isRunning ? (
@@ -580,7 +734,7 @@ export default function StockScreener() {
 
             {/* 进度和结果区 */}
             <AnimatePresence>
-                {(isRunning || matchedStocks.length > 0 || error) && (
+                {(isRunning || matchedStocks.length > 0 || error || scanCompleted) && (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -622,6 +776,23 @@ export default function StockScreener() {
                                 <AlertCircle className="w-5 h-5 text-coral-400 flex-shrink-0" />
                                 <span className="text-coral-300">{error}</span>
                             </div>
+                        )}
+
+                        {/* 无结果提示 */}
+                        {!isRunning && scanCompleted && matchedStocks.length === 0 && !error && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="p-8 text-center"
+                            >
+                                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-ink-700/50 border border-ink-600/50">
+                                    <Filter className="w-8 h-8 text-ink-500" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-ink-300 mb-2">未发现符合条件的股票</h3>
+                                <p className="text-sm text-ink-500 max-w-md mx-auto">
+                                    本次扫描共检测 {progress?.total || 0} 只股票，没有找到符合当前形态条件的标的。可以尝试调整参数后重新扫描。
+                                </p>
+                            </motion.div>
                         )}
 
                         {/* 结果列表 */}
@@ -670,7 +841,7 @@ export default function StockScreener() {
                                                             <span className="text-ink-100 font-medium">{stock.name}</span>
                                                         </div>
                                                         <div className="text-sm text-ink-400 mt-1">
-                                                            大阳日: {stock.base_date} → 信号日: {stock.signal_date}
+                                                            {stock.base_date} → {stock.signal_date}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -681,6 +852,16 @@ export default function StockScreener() {
                                                                 +{stock.details.big_yang_gain}%
                                                             </div>
                                                             <div className="text-xs text-ink-500">大阳涨幅</div>
+                                                        </div>
+                                                    )}
+                                                    {stock.details?.total_gain && !stock.details?.big_yang_gain && (
+                                                        <div className="text-right">
+                                                            <div className="text-coral-400 font-bold font-mono">
+                                                                +{stock.details.total_gain}%
+                                                            </div>
+                                                            <div className="text-xs text-ink-500">
+                                                                {stock.details.consecutive_days}天量价齐升 · 量比{stock.details.volume_ratio}x
+                                                            </div>
                                                         </div>
                                                     )}
                                                     <ChevronRight className="w-5 h-5 text-ink-500 group-hover:text-ink-300 transition-colors" />
@@ -727,7 +908,7 @@ export default function StockScreener() {
                                             {chartModalStock.code} {chartModalStock.name}
                                         </h3>
                                         <p className="text-sm text-ink-400">
-                                            大阳日: {chartModalStock.base_date} → 信号日: {chartModalStock.signal_date}
+                                            {chartModalStock.base_date} → {chartModalStock.signal_date}
                                         </p>
                                     </div>
                                 </div>
@@ -755,15 +936,39 @@ export default function StockScreener() {
                             </div>
 
                             {/* Footer */}
-                            {chartModalStock.details?.big_yang_gain && (
+                            {(chartModalStock.details?.big_yang_gain || chartModalStock.details?.total_gain) && (
                                 <div className="px-4 pb-4">
-                                    <div className="flex items-center gap-4 p-3 bg-ink-700/50 rounded-xl">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm text-ink-400">大阳涨幅:</span>
-                                            <span className="text-lg font-bold text-coral-400 font-mono">
-                                                +{chartModalStock.details.big_yang_gain}%
-                                            </span>
-                                        </div>
+                                    <div className="flex items-center gap-4 p-3 bg-ink-700/50 rounded-xl flex-wrap">
+                                        {chartModalStock.details?.big_yang_gain && (
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-ink-400">大阳涨幅:</span>
+                                                <span className="text-lg font-bold text-coral-400 font-mono">
+                                                    +{chartModalStock.details.big_yang_gain}%
+                                                </span>
+                                            </div>
+                                        )}
+                                        {chartModalStock.details?.total_gain && !chartModalStock.details?.big_yang_gain && (
+                                            <>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">累计涨幅:</span>
+                                                    <span className="text-lg font-bold text-coral-400 font-mono">
+                                                        +{chartModalStock.details.total_gain}%
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">连续天数:</span>
+                                                    <span className="text-lg font-bold text-amber-400 font-mono">
+                                                        {chartModalStock.details.consecutive_days}天
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">量比:</span>
+                                                    <span className="text-lg font-bold text-amber-400 font-mono">
+                                                        {chartModalStock.details.volume_ratio}x
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             )}
