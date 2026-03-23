@@ -292,8 +292,10 @@ export default function StockScreener() {
                 <span>${stock.base_date} → ${stock.signal_date}</span>
             </div>
             <div class="stock-meta">
-                ${stock.details?.big_yang_gain ? `<div class="gain">+${stock.details.big_yang_gain}%</div><div class="label">大阳涨幅</div>` : ''}
-                ${stock.details?.total_gain ? `<div class="gain">+${stock.details.total_gain}%</div><div class="label">${stock.details.consecutive_days || ''}天量价齐升</div>` : ''}
+                ${stock.details?.big_yang_gain !== undefined ? `<div class="gain">+${stock.details.big_yang_gain}%</div><div class="label">大阳涨幅</div>` : ''}
+                ${stock.details?.total_gain !== undefined ? `<div class="gain">+${stock.details.total_gain}%</div><div class="label">${stock.details.consecutive_days || ''}天量价齐升</div>` : ''}
+                ${stock.details?.close_to_short_ma_pct !== undefined ? `<div class="gain">${stock.details.above_long_days}天</div><div class="label">站上均线</div>` : ''}
+                ${stock.details?.breakout_pct !== undefined ? `<div class="gain">+${stock.details.breakout_pct}%</div><div class="label">${stock.details.platform_days}天平台突破</div>` : ''}
             </div>
         </div>
         <div class="chart" id="chart-${index}"></div>
@@ -846,7 +848,7 @@ export default function StockScreener() {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-4">
-                                                    {stock.details?.big_yang_gain && (
+                                                    {stock.details?.big_yang_gain !== undefined && (
                                                         <div className="text-right">
                                                             <div className="text-coral-400 font-bold font-mono">
                                                                 +{stock.details.big_yang_gain}%
@@ -854,13 +856,33 @@ export default function StockScreener() {
                                                             <div className="text-xs text-ink-500">大阳涨幅</div>
                                                         </div>
                                                     )}
-                                                    {stock.details?.total_gain && !stock.details?.big_yang_gain && (
+                                                    {stock.details?.total_gain !== undefined && (
                                                         <div className="text-right">
                                                             <div className="text-coral-400 font-bold font-mono">
                                                                 +{stock.details.total_gain}%
                                                             </div>
                                                             <div className="text-xs text-ink-500">
                                                                 {stock.details.consecutive_days}天量价齐升 · 量比{stock.details.volume_ratio}x
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {stock.details?.close_to_short_ma_pct !== undefined && (
+                                                        <div className="text-right">
+                                                            <div className="text-amber-400 font-bold font-mono">
+                                                                {stock.details.above_long_days}天
+                                                            </div>
+                                                            <div className="text-xs text-ink-500">
+                                                                日K站上均线 · 偏离{stock.details.close_to_short_ma_pct}%
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {stock.details?.breakout_pct !== undefined && (
+                                                        <div className="text-right">
+                                                            <div className="text-coral-400 font-bold font-mono">
+                                                                +{stock.details.breakout_pct}%
+                                                            </div>
+                                                            <div className="text-xs text-ink-500">
+                                                                {stock.details.platform_days}天平台突破 · 量比{stock.details.volume_ratio}x
                                                             </div>
                                                         </div>
                                                     )}
@@ -936,18 +958,30 @@ export default function StockScreener() {
                             </div>
 
                             {/* Footer */}
-                            {(chartModalStock.details?.big_yang_gain || chartModalStock.details?.total_gain) && (
+                            {chartModalStock.details && Object.keys(chartModalStock.details).length > 0 && (
                                 <div className="px-4 pb-4">
                                     <div className="flex items-center gap-4 p-3 bg-ink-700/50 rounded-xl flex-wrap">
-                                        {chartModalStock.details?.big_yang_gain && (
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm text-ink-400">大阳涨幅:</span>
-                                                <span className="text-lg font-bold text-coral-400 font-mono">
-                                                    +{chartModalStock.details.big_yang_gain}%
-                                                </span>
-                                            </div>
+                                        {/* 大阳后平台整理 */}
+                                        {chartModalStock.details?.big_yang_gain !== undefined && (
+                                            <>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">大阳涨幅:</span>
+                                                    <span className="text-lg font-bold text-coral-400 font-mono">
+                                                        +{chartModalStock.details.big_yang_gain}%
+                                                    </span>
+                                                </div>
+                                                {chartModalStock.details?.consolidation_days !== undefined && (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm text-ink-400">整理天数:</span>
+                                                        <span className="text-lg font-bold text-amber-400 font-mono">
+                                                            {chartModalStock.details.consolidation_days}天
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
-                                        {chartModalStock.details?.total_gain && !chartModalStock.details?.big_yang_gain && (
+                                        {/* 量价齐升 */}
+                                        {chartModalStock.details?.total_gain !== undefined && (
                                             <>
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-sm text-ink-400">累计涨幅:</span>
@@ -963,6 +997,52 @@ export default function StockScreener() {
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-sm text-ink-400">量比:</span>
+                                                    <span className="text-lg font-bold text-amber-400 font-mono">
+                                                        {chartModalStock.details.volume_ratio}x
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
+                                        {/* 均线多头排列 */}
+                                        {chartModalStock.details?.close_to_short_ma_pct !== undefined && (
+                                            <>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">MA排列:</span>
+                                                    <span className="text-lg font-bold text-amber-400 font-mono">
+                                                        {chartModalStock.details.short_ma}-{chartModalStock.details.mid_ma}-{chartModalStock.details.long_ma}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">站上均线:</span>
+                                                    <span className="text-lg font-bold text-amber-400 font-mono">
+                                                        {chartModalStock.details.above_long_days}天
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">均线偏离:</span>
+                                                    <span className="text-lg font-bold text-amber-400 font-mono">
+                                                        {chartModalStock.details.close_to_short_ma_pct}%
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
+                                        {/* 平台突破 */}
+                                        {chartModalStock.details?.breakout_pct !== undefined && (
+                                            <>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">整理平台:</span>
+                                                    <span className="text-lg font-bold text-amber-400 font-mono">
+                                                        {chartModalStock.details.platform_days}天
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">突破涨幅:</span>
+                                                    <span className="text-lg font-bold text-coral-400 font-mono">
+                                                        +{chartModalStock.details.breakout_pct}%
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-ink-400">突破量比:</span>
                                                     <span className="text-lg font-bold text-amber-400 font-mono">
                                                         {chartModalStock.details.volume_ratio}x
                                                     </span>
