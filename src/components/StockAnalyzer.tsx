@@ -54,6 +54,8 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
 
   // Input State
   const [stockCode, setStockCode] = useState('');
+  const [holdingQuantity, setHoldingQuantity] = useState<number | ''>('');
+  const [costPrice, setCostPrice] = useState<number | ''>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [validation, setValidation] = useState<StockValidation | null>(null);
@@ -269,7 +271,11 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),
         },
-        body: JSON.stringify({ stock_code: stockCode }),
+        body: JSON.stringify({ 
+          stock_code: stockCode,
+          holding_quantity: holdingQuantity === '' ? undefined : Number(holdingQuantity),
+          cost_price: costPrice === '' ? undefined : Number(costPrice)
+        }),
       });
 
       const data = await response.json();
@@ -302,6 +308,8 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
 
       setTasks(prev => [newTask, ...prev]);
       setStockCode('');
+      setHoldingQuantity('');
+      setCostPrice('');
       setValidation(null);
       handleSelectTask(newTask); // Auto-select the new task
       startPolling();
@@ -658,6 +666,40 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
                     <XCircle className="w-4 h-4" /> {validation.message}
                   </motion.div>
                 )}
+              </motion.div>
+
+              {/* Holding Info Inputs (Optional) */}
+              <motion.div
+                className="flex flex-col sm:flex-row gap-4 mt-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45 }}
+              >
+                <div className="flex-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <span className="text-ink-400 text-sm">持仓数量(股):</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={holdingQuantity}
+                    onChange={(e) => setHoldingQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="选填"
+                    className="input w-full pl-28 py-3 text-sm bg-ink-800 border-ink-600 focus:border-amber-400/50"
+                  />
+                </div>
+                <div className="flex-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <span className="text-ink-400 text-sm">持仓成本(元):</span>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={costPrice}
+                    onChange={(e) => setCostPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="选填"
+                    className="input w-full pl-28 py-3 text-sm bg-ink-800 border-ink-600 focus:border-amber-400/50"
+                  />
+                </div>
               </motion.div>
 
               {/* User Info / Invite Code */}

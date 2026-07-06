@@ -11,6 +11,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl;
     const stock_code = searchParams.get('stock_code');
 
+    const holding_quantity = searchParams.get('holding_quantity');
+    const cost_price = searchParams.get('cost_price');
+
     if (!stock_code) {
       return new Response(
         JSON.stringify({ error: 'stock_code is required' }),
@@ -21,10 +24,12 @@ export async function GET(request: NextRequest) {
     // 获取 Authorization header
     const authorization = request.headers.get('authorization');
 
+    let backendUrl = `${BACKEND_URL}/api/analyze?stock_code=${encodeURIComponent(stock_code)}`;
+    if (holding_quantity) backendUrl += `&holding_quantity=${encodeURIComponent(holding_quantity)}`;
+    if (cost_price) backendUrl += `&cost_price=${encodeURIComponent(cost_price)}`;
+
     // 转发到 FastAPI 后端
-    const backendResponse = await fetch(
-      `${BACKEND_URL}/api/analyze?stock_code=${encodeURIComponent(stock_code)}`,
-      {
+    const backendResponse = await fetch(backendUrl, {
         method: 'GET',
         headers: {
           'Accept': 'text/event-stream',
