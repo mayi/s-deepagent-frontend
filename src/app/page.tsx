@@ -6,12 +6,13 @@ import { motion } from 'framer-motion';
 import StockAnalyzer from '@/components/StockAnalyzer';
 import StockRadar from '@/components/StockRadar';
 import StockScreener from '@/components/StockScreener';
+import TradingSystemManager from '@/components/TradingSystemManager';
 import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { TrendingUp, User, LogOut, Lock, Sparkles, Coins, Filter } from 'lucide-react';
+import { TrendingUp, User, LogOut, Lock, Sparkles, Coins, Filter, BookOpen } from 'lucide-react';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'analyzer' | 'radar' | 'screener'>('analyzer');
+  const [activeTab, setActiveTab] = useState<'analyzer' | 'radar' | 'screener' | 'trading-systems'>('analyzer');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { user, isLoading, logout } = useAuth();
 
@@ -28,6 +29,14 @@ export default function Home() {
       setShowAuthModal(true);
     } else {
       setActiveTab('screener');
+    }
+  };
+
+  const handleTradingSystemsClick = () => {
+    if (!user) {
+      setShowAuthModal(true);
+    } else {
+      setActiveTab('trading-systems');
     }
   };
 
@@ -219,6 +228,32 @@ export default function Home() {
                 <Lock className="relative z-10 w-3.5 h-3.5 text-amber-400" />
               )}
             </motion.button>
+
+            {/* 交易系统 Tab */}
+            <motion.button
+              onClick={handleTradingSystemsClick}
+              className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 ${activeTab === 'trading-systems'
+                ? 'text-ink-900'
+                : 'text-ink-300 hover:text-ink-100'
+                }`}
+              whileHover={{ scale: activeTab === 'trading-systems' ? 1 : 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {activeTab === 'trading-systems' && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                  }}
+                  transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <span className="relative z-10">交易系统</span>
+              {!user && (
+                <Lock className="relative z-10 w-3.5 h-3.5 text-amber-400" />
+              )}
+            </motion.button>
           </div>
         </motion.div>
 
@@ -235,9 +270,13 @@ export default function Home() {
             <div className="h-full overflow-y-auto">
               <StockRadar />
             </div>
-          ) : (
+          ) : activeTab === 'screener' ? (
             <div className="h-full overflow-y-auto">
               <StockScreener />
+            </div>
+          ) : (
+            <div className="h-full overflow-y-auto card">
+              <TradingSystemManager />
             </div>
           )}
         </motion.div>

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Search, Loader2, CheckCircle2, XCircle, Clock,
   Trash2, RefreshCw, ArrowLeft, Bell,
-  BellOff, Plus, ChevronRight, BarChart3, Sparkles, Zap
+  BellOff, Plus, ChevronRight, BarChart3, Sparkles, Zap, BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,6 +71,11 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
   const [inviteMessage, setInviteMessage] = useState<string>('');
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
 
+  // Trading System State
+  const [tradingSystems, setTradingSystems] = useState<{id: number; name: string; is_preset: number}[]>([]);
+  const [selectedTradingSystemId, setSelectedTradingSystemId] = useState<number | ''>('');
+  const [tradingSystemDefaultId, setTradingSystemDefaultId] = useState<number | null>(null);
+
   // Refs
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -129,6 +134,33 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
   useEffect(() => {
     loadTasks();
   }, [loadTasks]);
+
+  // Load trading systems
+  useEffect(() => {
+    if (!token) {
+      setTradingSystems([]);
+      return;
+    }
+    const loadTradingSystems = async () => {
+      try {
+        const res = await fetch('/api/trading-systems', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success) {
+          setTradingSystems(data.systems || []);
+          setTradingSystemDefaultId(data.default_id || null);
+          // Auto-select default
+          if (data.default_id && selectedTradingSystemId === '') {
+            setSelectedTradingSystemId(data.default_id);
+          }
+        }
+      } catch (err) {
+        console.error('加载交易系统失败:', err);
+      }
+    };
+    loadTradingSystems();
+  }, [token]);
 
   useEffect(() => {
     tasksRef.current = tasks;
@@ -274,7 +306,8 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
         body: JSON.stringify({ 
           stock_code: stockCode,
           holding_quantity: holdingQuantity === '' ? undefined : Number(holdingQuantity),
-          cost_price: costPrice === '' ? undefined : Number(costPrice)
+          cost_price: costPrice === '' ? undefined : Number(costPrice),
+          trading_system_id: selectedTradingSystemId === '' ? undefined : Number(selectedTradingSystemId)
         }),
       });
 
@@ -701,6 +734,46 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
                   />
                 </div>
               </motion.div>
+
+              {/* Trading System Selector */}
+              {tradingSystems.length > 0 && (
+                <motion.div
+                  className="mt-4"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.47 }}
+                >
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <BookOpen className="w-4 h-4 text-ink-400" />
+                      <span className="text-ink-400 text-sm ml-2">交易系统:</span>
+                    </div>
+                    <select
+                      value={selectedTradingSystemId}
+                      onChange={(e) => setSelectedTradingSystemId(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="input w-full pl-28 py-3 text-sm bg-ink-800 border-ink-600 focus:border-amber-400/50 appearance-none cursor-pointer"
+                      style={{ colorScheme: 'dark' }}
+                    >
+                      <option value="">不使用交易系统（通用分析）</option>
+                      {tradingSystems.map(ts => (
+                        <option key={ts.id} value={ts.id}>
+                          {ts.name}{ts.is_preset ? ' (预置)' : ''}{tradingSystemDefaultId === ts.id ? ' ★' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      <svg className="w-4 h-4 text-ink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                  {selectedTradingSystemId !== '' && (
+                    <p className="text-xs text-amber-400/60 mt-2 pl-1">
+                      ℹ️ 分析报告将包含基于该交易系统规则的操作指导
+                    </p>
+                  )}
+                </motion.div>
+              )}
 
               {/* User Info / Invite Code */}
               {user && (
