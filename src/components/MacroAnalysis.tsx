@@ -299,7 +299,7 @@ export default function MacroAnalysis() {
       {/* Left Panel: Input + History */}
       <div className="w-80 flex-none flex flex-col gap-3 min-h-0">
         {/* Input Card */}
-        <div className="card flex flex-col gap-3">
+        <div className="card flex flex-col gap-3 p-5">
           <div className="flex items-center gap-2">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -403,7 +403,7 @@ export default function MacroAnalysis() {
         </div>
 
         {/* History Card */}
-        <div className="card flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="card flex-1 flex flex-col min-h-0 overflow-hidden p-5">
           <div className="flex items-center justify-between mb-3 flex-none">
             <h3 className="text-sm font-semibold text-ink-200 flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-ink-400" />
@@ -474,7 +474,7 @@ export default function MacroAnalysis() {
 
       {/* Right Panel: Analysis Result */}
       <div className="flex-1 min-h-0 flex flex-col">
-        <div className="card flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="card flex-1 flex flex-col min-h-0 overflow-hidden p-6 md:p-8">
           {/* Progress */}
           <AnimatePresence>
             {isAnalyzing && progressItems.length > 0 && (
