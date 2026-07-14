@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Globe, Loader2, Send, Trash2, Clock, CheckCircle2,
-  XCircle, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Target, BrainCircuit
+  XCircle, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, TrendingUp, TrendingDown, Target, BrainCircuit, Rss
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
@@ -70,6 +70,10 @@ export default function MacroAnalysis() {
   const [backtestResults, setBacktestResults] = useState<BacktestResult[] | null>(null);
   const [backtestScore, setBacktestScore] = useState<BacktestScore | null>(null);
   const [backtestError, setBacktestError] = useState<string>('');
+
+  // RSS State
+  const [isFetchingRss, setIsFetchingRss] = useState(false);
+  const [rssSource, setRssSource] = useState('eeo_finance');
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -269,6 +273,27 @@ export default function MacroAnalysis() {
     }
   }, [currentRecordId, token]);
 
+  const handleFetchRss = useCallback(async () => {
+    if (!token) return;
+    setIsFetchingRss(true);
+    setAnalysisError('');
+    try {
+      const res = await fetch(`/api/macro/rss?source=${rssSource}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAnalysisError(data.detail || data.error || '获取 RSS 失败');
+      } else if (data.success && data.data) {
+        setNewsContent(data.data);
+      }
+    } catch (e: any) {
+      setAnalysisError(e.message || '网络错误');
+    } finally {
+      setIsFetchingRss(false);
+    }
+  }, [rssSource, token]);
+
   return (
     <div className="h-full flex gap-4 min-h-0">
       {/* Left Panel: Input + History */}
@@ -286,6 +311,27 @@ export default function MacroAnalysis() {
               <h2 className="text-sm font-bold text-ink-100">宏观策略分析</h2>
               <p className="text-xs text-ink-400">200 积分 / 次</p>
             </div>
+          </div>
+          
+          <div className="flex items-center gap-2 mt-1">
+            <select
+              value={rssSource}
+              onChange={(e) => setRssSource(e.target.value)}
+              disabled={isAnalyzing || isFetchingRss}
+              className="bg-ink-800 border border-ink-700 text-ink-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="eeo_finance">经济观察网 (EEO)</option>
+              <option value="bloomberg_markets">Bloomberg Markets</option>
+              <option value="bloomberg_economics">Bloomberg Economics</option>
+            </select>
+            <button
+              onClick={handleFetchRss}
+              disabled={isAnalyzing || isFetchingRss}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-ink-800 hover:bg-ink-700 text-ink-300 text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-ink-700"
+            >
+              {isFetchingRss ? <Loader2 className="w-3 h-3 animate-spin" /> : <Rss className="w-3 h-3" />}
+              获取最新
+            </button>
           </div>
 
           <textarea
