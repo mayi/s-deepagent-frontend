@@ -73,7 +73,7 @@ export default function MacroAnalysis() {
 
   // RSS State
   const [isFetchingRss, setIsFetchingRss] = useState(false);
-  const [rssSource, setRssSource] = useState('eeo_finance');
+  const [rssSource, setRssSource] = useState('all');
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -320,9 +320,12 @@ export default function MacroAnalysis() {
               disabled={isAnalyzing || isFetchingRss}
               className="bg-ink-800 border border-ink-700 text-ink-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
-              <option value="eeo_finance">经济观察网 (EEO)</option>
-              <option value="bloomberg_markets">Bloomberg Markets</option>
-              <option value="bloomberg_economics">Bloomberg Economics</option>
+              <option value="all">获取全部信息源聚合</option>
+              <option value="zaobao_world">联合早报 (国际)</option>
+              <option value="engadget">Engadget (科技)</option>
+              <option value="36kr">36氪 (创投/商业)</option>
+              <option value="fortune_china">财富中文网 (商业)</option>
+              <option value="wsj_cn">华尔街日报 (中文)</option>
             </select>
             <button
               onClick={handleFetchRss}
