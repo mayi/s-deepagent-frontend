@@ -7,12 +7,13 @@ import StockAnalyzer from '@/components/StockAnalyzer';
 import StockRadar from '@/components/StockRadar';
 import StockScreener from '@/components/StockScreener';
 import TradingSystemManager from '@/components/TradingSystemManager';
+import MacroAnalysis from '@/components/MacroAnalysis';
 import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { TrendingUp, User, LogOut, Lock, Sparkles, Coins, Filter, BookOpen } from 'lucide-react';
+import { TrendingUp, User, LogOut, Lock, Sparkles, Coins, Filter, BookOpen, Globe } from 'lucide-react';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'analyzer' | 'radar' | 'screener' | 'trading-systems'>('analyzer');
+  const [activeTab, setActiveTab] = useState<'analyzer' | 'radar' | 'screener' | 'trading-systems' | 'macro'>('analyzer');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { user, isLoading, logout } = useAuth();
 
@@ -37,6 +38,14 @@ export default function Home() {
       setShowAuthModal(true);
     } else {
       setActiveTab('trading-systems');
+    }
+  };
+
+  const handleMacroClick = () => {
+    if (!user) {
+      setShowAuthModal(true);
+    } else {
+      setActiveTab('macro');
     }
   };
 
@@ -254,6 +263,33 @@ export default function Home() {
                 <Lock className="relative z-10 w-3.5 h-3.5 text-amber-400" />
               )}
             </motion.button>
+
+            {/* 宏观分析 Tab */}
+            <motion.button
+              onClick={handleMacroClick}
+              className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 ${activeTab === 'macro'
+                ? 'text-white'
+                : 'text-ink-300 hover:text-ink-100'
+                }`}
+              whileHover={{ scale: activeTab === 'macro' ? 1 : 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {activeTab === 'macro' && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                  }}
+                  transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <Globe className="relative z-10 w-3.5 h-3.5" />
+              <span className="relative z-10">宏观分析</span>
+              {!user && (
+                <Lock className="relative z-10 w-3.5 h-3.5 text-amber-400" />
+              )}
+            </motion.button>
           </div>
         </motion.div>
 
@@ -273,6 +309,10 @@ export default function Home() {
           ) : activeTab === 'screener' ? (
             <div className="h-full overflow-y-auto">
               <StockScreener />
+            </div>
+          ) : activeTab === 'macro' ? (
+            <div className="h-full overflow-y-auto lg:overflow-hidden">
+              <MacroAnalysis />
             </div>
           ) : (
             <div className="h-full overflow-y-auto card">
