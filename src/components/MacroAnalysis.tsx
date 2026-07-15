@@ -297,9 +297,9 @@ export default function MacroAnalysis() {
   return (
     <div className="h-full flex gap-4 min-h-0">
       {/* Left Panel: Input + History */}
-      <div className="w-80 flex-none flex flex-col gap-3 min-h-0">
+      <div className="w-80 flex-none flex flex-col gap-3 h-full overflow-y-auto custom-scrollbar pb-4 pr-1">
         {/* Input Card */}
-        <div className="card flex flex-col gap-3 p-5">
+        <div className="card flex-none flex flex-col gap-3 p-5">
           <div className="flex items-center gap-2">
             <div
               className="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -406,7 +406,7 @@ export default function MacroAnalysis() {
         </div>
 
         {/* History Card */}
-        <div className="card flex-1 flex flex-col min-h-0 overflow-hidden p-5">
+        <div className="card flex-none flex flex-col p-5 min-h-[250px]">
           <div className="flex items-center justify-between mb-3 flex-none">
             <h3 className="text-sm font-semibold text-ink-200 flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-ink-400" />
@@ -421,7 +421,7 @@ export default function MacroAnalysis() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+          <div className="flex flex-col space-y-1.5">
             {history.length === 0 && !isLoadingHistory && (
               <p className="text-xs text-ink-500 text-center py-4">暂无历史记录</p>
             )}
