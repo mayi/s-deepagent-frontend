@@ -6,9 +6,10 @@ export const dynamic = 'force-dynamic';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { stock_code: string } }
+  context: { params: Promise<{ stock_code: string }> }
 ) {
   try {
+    const params = await context.params;
     const authorization = request.headers.get('authorization');
     const backendResponse = await fetch(`${BACKEND_URL}/api/watched-stocks/${params.stock_code}`, {
       method: 'DELETE',
