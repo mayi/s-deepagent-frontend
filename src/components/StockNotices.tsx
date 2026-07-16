@@ -32,7 +32,7 @@ interface StockNotice {
 }
 
 export default function StockNotices() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [watchedStocks, setWatchedStocks] = useState<string[]>([]);
   const [notices, setNotices] = useState<StockNotice[]>([]);
   const [newStockCode, setNewStockCode] = useState('');
@@ -44,7 +44,7 @@ export default function StockNotices() {
     try {
       const res = await fetch('/api/watched-stocks', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       const data = await res.json();
@@ -61,7 +61,7 @@ export default function StockNotices() {
       setIsLoading(true);
       const res = await fetch('/api/stock-notices?limit=50', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       const data = await res.json();
@@ -99,7 +99,7 @@ export default function StockNotices() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ stock_code: newStockCode.trim() })
       });
@@ -126,7 +126,7 @@ export default function StockNotices() {
       const res = await fetch(`/api/watched-stocks/${stockCode}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       const data = await res.json();
