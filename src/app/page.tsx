@@ -8,12 +8,13 @@ import StockRadar from '@/components/StockRadar';
 import StockScreener from '@/components/StockScreener';
 import TradingSystemManager from '@/components/TradingSystemManager';
 import MacroAnalysis from '@/components/MacroAnalysis';
+import StockNotices from '@/components/StockNotices';
 import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { TrendingUp, User, LogOut, Lock, Sparkles, Coins, Filter, BookOpen, Globe } from 'lucide-react';
+import { TrendingUp, User, LogOut, Lock, Sparkles, Coins, Filter, BookOpen, Globe, Bell } from 'lucide-react';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'analyzer' | 'radar' | 'screener' | 'trading-systems' | 'macro'>('analyzer');
+  const [activeTab, setActiveTab] = useState<'analyzer' | 'radar' | 'screener' | 'trading-systems' | 'macro' | 'notices'>('analyzer');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { user, isLoading, logout } = useAuth();
 
@@ -46,6 +47,14 @@ export default function Home() {
       setShowAuthModal(true);
     } else {
       setActiveTab('macro');
+    }
+  };
+
+  const handleNoticesClick = () => {
+    if (!user) {
+      setShowAuthModal(true);
+    } else {
+      setActiveTab('notices');
     }
   };
 
@@ -290,6 +299,33 @@ export default function Home() {
                 <Lock className="relative z-10 w-3.5 h-3.5 text-amber-400" />
               )}
             </motion.button>
+            
+            {/* 公告追踪 Tab */}
+            <motion.button
+              onClick={handleNoticesClick}
+              className={`relative px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 ${activeTab === 'notices'
+                ? 'text-white'
+                : 'text-ink-300 hover:text-ink-100'
+                }`}
+              whileHover={{ scale: activeTab === 'notices' ? 1 : 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {activeTab === 'notices' && (
+                <motion.div
+                  layoutId="activeTab"
+                  className="absolute inset-0 rounded-xl"
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  }}
+                  transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <Bell className="relative z-10 w-3.5 h-3.5" />
+              <span className="relative z-10">公告追踪</span>
+              {!user && (
+                <Lock className="relative z-10 w-3.5 h-3.5 text-amber-400" />
+              )}
+            </motion.button>
           </div>
         </motion.div>
 
@@ -313,6 +349,10 @@ export default function Home() {
           ) : activeTab === 'macro' ? (
             <div className="h-full overflow-y-auto lg:overflow-hidden">
               <MacroAnalysis />
+            </div>
+          ) : activeTab === 'notices' ? (
+            <div className="h-full overflow-y-auto">
+              <StockNotices />
             </div>
           ) : (
             <div className="h-full overflow-y-auto card">
