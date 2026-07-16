@@ -42,7 +42,7 @@ export default function StockNotices() {
 
   const fetchWatchedStocks = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/watched-stocks', {
+      const res = await fetch('/api/watched-stocks', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -59,7 +59,7 @@ export default function StockNotices() {
   const fetchNotices = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('http://localhost:8000/api/stock-notices?limit=50', {
+      const res = await fetch('/api/stock-notices?limit=50', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -95,7 +95,7 @@ export default function StockNotices() {
     try {
       setIsAdding(true);
       setError('');
-      const res = await fetch('http://localhost:8000/api/watched-stocks', {
+      const res = await fetch('/api/watched-stocks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -123,7 +123,7 @@ export default function StockNotices() {
 
   const handleRemoveStock = async (stockCode: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/watched-stocks/${stockCode}`, {
+      const res = await fetch(`/api/watched-stocks/${stockCode}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
