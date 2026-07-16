@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -19,11 +19,13 @@ import {
 interface WatchedStock {
   id?: number;
   stock_code: string;
+  stock_name?: string;
 }
 
 interface StockNotice {
   id: number;
   stock_code: string;
+  stock_name?: string;
   title: string;
   notice_date: string;
   url: string;
@@ -33,12 +35,16 @@ interface StockNotice {
 
 export default function StockNotices() {
   const { user, token } = useAuth();
-  const [watchedStocks, setWatchedStocks] = useState<string[]>([]);
+  const [watchedStocks, setWatchedStocks] = useState<WatchedStock[]>([]);
   const [notices, setNotices] = useState<StockNotice[]>([]);
   const [newStockCode, setNewStockCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState('');
+  
+  const [searchResults, setSearchResults] = useState<Array<{code: string, name: string}>>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchWatchedStocks = async () => {
     try {
@@ -81,6 +87,42 @@ export default function StockNotices() {
       fetchNotices();
     }
   }, [user]);
+
+  const searchStocks = async (keyword: string) => {
+    if (!keyword.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    try {
+      const response = await fetch(`/api/stock/search?keyword=${encodeURIComponent(keyword)}&limit=10`);
+      const data = await response.json();
+      if (data.success && data.stocks) {
+        setSearchResults(data.stocks);
+        setShowSearchResults(data.stocks.length > 0);
+      }
+    } catch (error) { console.error(error); }
+  };
+
+  const handleStockCodeChange = (value: string) => {
+    setNewStockCode(value);
+    setError('');
+    
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (value.length >= 1) {
+      searchTimeoutRef.current = setTimeout(() => searchStocks(value), 300);
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+  };
+
+  const handleSelectSearchResult = (stockCode: string) => {
+    setNewStockCode(stockCode);
+    setSearchResults([]);
+    setShowSearchResults(false);
+  };
 
   const handleAddStock = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,12 +223,9 @@ export default function StockNotices() {
               <Search className="absolute left-3 w-4 h-4 text-ink-400" />
               <input
                 type="text"
-                placeholder="输入股票代码 (如 000001)"
+                placeholder="输入股票名称或代码 (如 平安 或 000001)"
                 value={newStockCode}
-                onChange={(e) => {
-                  setNewStockCode(e.target.value);
-                  setError('');
-                }}
+                onChange={(e) => handleStockCodeChange(e.target.value)}
                 className="w-full pl-9 pr-12 py-2.5 bg-ink-800 border border-ink-600 rounded-xl text-sm focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all text-ink-100"
               />
               <button
@@ -202,13 +241,39 @@ export default function StockNotices() {
                 {error}
               </motion.p>
             )}
+            
+            <AnimatePresence>
+              {showSearchResults && searchResults.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute top-full left-0 right-0 mt-2 bg-ink-800 border border-ink-600 rounded-xl shadow-xl overflow-hidden z-50 max-h-60 overflow-y-auto"
+                >
+                  <ul className="py-1">
+                    {searchResults.map((stock) => (
+                      <li key={stock.code}>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectSearchResult(stock.code)}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-ink-700 flex items-center justify-between"
+                        >
+                          <span className="text-ink-100">{stock.name}</span>
+                          <span className="font-mono text-ink-400">{stock.code}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
 
           <div className="flex-1 overflow-y-auto pr-2 space-y-2" style={{ WebkitOverflowScrolling: 'touch' }}>
             <AnimatePresence>
-              {watchedStocks.map((code) => (
+              {watchedStocks.map((stock) => (
                 <motion.div
-                  key={code}
+                  key={stock.stock_code}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.9 }}
@@ -216,10 +281,12 @@ export default function StockNotices() {
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
-                    <span className="font-mono text-sm font-medium text-ink-200">{code}</span>
+                    <span className="font-mono text-sm font-medium text-ink-200">
+                      {stock.stock_name ? `${stock.stock_name} (${stock.stock_code})` : stock.stock_code}
+                    </span>
                   </div>
                   <button
-                    onClick={() => handleRemoveStock(code)}
+                    onClick={() => handleRemoveStock(stock.stock_code)}
                     className="p-1.5 text-ink-500 hover:text-coral-400 hover:bg-coral-400/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -270,7 +337,7 @@ export default function StockNotices() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="px-2 py-0.5 text-xs font-mono font-medium rounded-md bg-ink-700 text-ink-300">
-                        {notice.stock_code}
+                        {notice.stock_name ? `${notice.stock_name} (${notice.stock_code})` : notice.stock_code}
                       </span>
                       {notice.category && (
                         <span className="px-2 py-0.5 text-xs rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
