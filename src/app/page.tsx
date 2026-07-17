@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import StockAnalyzer from '@/components/StockAnalyzer';
 import StockRadar from '@/components/StockRadar';
 import StockScreener from '@/components/StockScreener';
@@ -10,12 +10,14 @@ import TradingSystemManager from '@/components/TradingSystemManager';
 import MacroAnalysis from '@/components/MacroAnalysis';
 import StockNotices from '@/components/StockNotices';
 import AuthModal from '@/components/AuthModal';
+import ApiKeySettings from '@/components/ApiKeySettings';
 import { useAuth } from '@/contexts/AuthContext';
-import { TrendingUp, User, LogOut, Lock, Sparkles, Coins, Filter, BookOpen, Globe, Bell } from 'lucide-react';
+import { TrendingUp, User, LogOut, Lock, Sparkles, Coins, Filter, BookOpen, Globe, Bell, Key, X } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'analyzer' | 'radar' | 'screener' | 'trading-systems' | 'macro' | 'notices'>('analyzer');
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showApiKeyPanel, setShowApiKeyPanel] = useState(false);
   const { user, isLoading, logout } = useAuth();
 
   const handleRadarClick = () => {
@@ -131,6 +133,21 @@ export default function Home() {
                     <span className="text-xs text-jade-400/70">积分</span>
                   </motion.div>
 
+                  {/* API Key 按钮 */}
+                  <motion.button
+                    onClick={() => setShowApiKeyPanel(!showApiKeyPanel)}
+                    className={`p-2.5 rounded-xl transition-all ${
+                      showApiKeyPanel
+                        ? 'text-violet-400 bg-violet-500/10'
+                        : 'text-ink-400 hover:text-violet-400 hover:bg-violet-500/10'
+                    }`}
+                    title="API Key 管理"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Key className="w-5 h-5" />
+                  </motion.button>
+
                   {/* 登出按钮 */}
                   <motion.button
                     onClick={logout}
@@ -157,6 +174,33 @@ export default function Home() {
           </div>
         </div>
       </motion.header>
+
+      {/* API Key Settings Panel */}
+      <AnimatePresence>
+        {showApiKeyPanel && user && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="flex-none z-40 overflow-hidden border-b border-ink-600/50"
+          >
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+              <div className="relative">
+                <motion.button
+                  onClick={() => setShowApiKeyPanel(false)}
+                  className="absolute top-0 right-0 p-1.5 rounded-lg text-ink-400 hover:text-ink-200 hover:bg-ink-700/50 transition-colors"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <X className="w-4 h-4" />
+                </motion.button>
+                <ApiKeySettings />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content Container */}
       <div
