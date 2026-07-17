@@ -327,7 +327,7 @@ export default function ApiKeySettings() {
           <h5 className="text-xs font-medium text-ink-300 mb-2">调用示例 (curl):</h5>
           <div className="relative">
             <pre className="px-4 py-3 rounded-lg bg-ink-900/80 text-xs font-mono text-ink-300 overflow-x-auto whitespace-pre-wrap break-all">
-{`curl -X POST http://YOUR_HOST:8000/api/v1/stock/analyze \\
+{`curl -X POST https://sapi.flowertimes.top/api/v1/stock/analyze \\
   -H "X-API-Key: YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"stock_code": "002015"}'`}
