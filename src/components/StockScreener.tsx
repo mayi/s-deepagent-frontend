@@ -296,6 +296,7 @@ export default function StockScreener() {
                 ${stock.details?.total_gain !== undefined ? `<div class="gain">+${stock.details.total_gain}%</div><div class="label">${stock.details.consecutive_days || ''}天量价齐升</div>` : ''}
                 ${stock.details?.close_to_short_ma_pct !== undefined ? `<div class="gain">${stock.details.above_long_days}天</div><div class="label">站上均线</div>` : ''}
                 ${stock.details?.breakout_pct !== undefined ? `<div class="gain">+${stock.details.breakout_pct}%</div><div class="label">${stock.details.platform_days}天平台突破</div>` : ''}
+                ${stock.details?.current_profit_pct !== undefined ? `<div class="gain" style="color: ${stock.details.current_profit_pct > 0 ? '#f87171' : '#4ade80'}">${stock.details.current_profit_pct > 0 ? '+' : ''}${stock.details.current_profit_pct}%</div><div class="label">当前盈亏 (止损价 ${stock.details.current_stop_loss})</div>` : ''}
             </div>
         </div>
         <div class="chart" id="chart-${index}"></div>
@@ -883,6 +884,16 @@ export default function StockScreener() {
                                                             </div>
                                                             <div className="text-xs text-ink-500">
                                                                 {stock.details.platform_days}天平台突破 · 量比{stock.details.volume_ratio}x
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {stock.details?.current_profit_pct !== undefined && (
+                                                        <div className="text-right">
+                                                            <div className={`font-bold font-mono ${stock.details.current_profit_pct > 0 ? 'text-coral-400' : 'text-jade-400'}`}>
+                                                                {stock.details.current_profit_pct > 0 ? '+' : ''}{stock.details.current_profit_pct}%
+                                                            </div>
+                                                            <div className="text-xs text-ink-500">
+                                                                买入价 {stock.details.buy_price} · 止损价 {stock.details.current_stop_loss}
                                                             </div>
                                                         </div>
                                                     )}
