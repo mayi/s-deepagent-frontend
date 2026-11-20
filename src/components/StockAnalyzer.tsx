@@ -169,6 +169,22 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
     if (hasRunning) startPolling();
   }, [tasks]);
 
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      if (validationTimeoutRef.current) {
+        clearTimeout(validationTimeoutRef.current);
+      }
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // --- Polling Logic ---
 
   const pollTaskStatus = useCallback(async (taskId: string) => {
@@ -379,8 +395,17 @@ export default function StockAnalyzer({ onNeedLogin }: StockAnalyzerProps = {}) 
     }
     setIsValidating(true);
     try {
-      const response = await fetch(`/api/stock/validate?code=${encodeURIComponent(code)}`);
+      const response = await fetch(`/api/stock/validate?stock_code=${encodeURIComponent(code)}`);
       const data = await response.json();
+      if (!response.ok || typeof data?.valid !== 'boolean') {
+        setValidation({
+          valid: false,
+          message: data?.detail || data?.error || '验证失败',
+          stock_name: '',
+          stock_code: code,
+        });
+        return;
+      }
       setValidation(data);
     } catch {
       setValidation({ valid: false, message: '验证失败', stock_name: '', stock_code: code });

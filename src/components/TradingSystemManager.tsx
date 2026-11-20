@@ -191,9 +191,15 @@ export default function TradingSystemManager() {
     try {
       const isCurrentDefault = defaultId === systemId;
       if (isCurrentDefault) {
-        // Clear default - use the parent route method
-        // We'd need a different endpoint for this, or send system_id=0
-        // For simplicity, we just toggle - set it again won't hurt
+        const res = await fetch('/api/trading-systems/default', {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setDefaultId(null);
+          loadSystems();
+        }
         return;
       }
 

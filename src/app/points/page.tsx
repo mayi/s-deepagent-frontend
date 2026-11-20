@@ -11,6 +11,7 @@ export default function PointsRulesPage() {
       title: '积分变动',
       items: [
         { label: '每次进行股票分析', value: '-100', color: 'text-coral-400' },
+        { label: '每次进行宏观策略分析', value: '-200', color: 'text-coral-400' },
         { label: '注册成功', value: '+500', color: 'text-jade-400' },
         { label: '成功邀请一位新用户', value: '+200', color: 'text-jade-400' },
       ],
@@ -139,6 +140,7 @@ export default function PointsRulesPage() {
             </div>
             <p className="text-ink-400 text-sm leading-relaxed">
               若积分不足，将无法提交新的分析任务。积分余额以登录状态下显示为准。
+              分析任务若因异常或服务故障失败，系统会自动返还已锁定的积分。
               如需更多积分，请通过邀请好友注册的方式获取。
             </p>
           </motion.div>

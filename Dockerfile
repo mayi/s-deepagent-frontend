@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1
 
-FROM node:22.21-alpine3.23 AS base
+FROM node:22.23.5-alpine3.24 AS base
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -30,7 +30,7 @@ RUN \
   fi
 
 # Production image, copy only the standalone output produced by Next.js
-FROM node:22.21-alpine3.23 AS runner
+FROM node:22.23.5-alpine3.24 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

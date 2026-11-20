@@ -148,6 +148,11 @@ export default function StockScreener() {
                 }
             );
 
+            if (!response.ok) {
+                const errText = await response.text().catch(() => '');
+                throw new Error(errText || `请求失败 (${response.status})`);
+            }
+
             const reader = response.body?.getReader();
             const decoder = new TextDecoder();
 
@@ -155,33 +160,42 @@ export default function StockScreener() {
                 throw new Error('无法读取响应');
             }
 
+            const processBlock = (block: string) => {
+                for (const rawLine of block.split(/\r?\n/)) {
+                    const line = rawLine.trim();
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.type === 'progress') {
+                            setProgress({ current: data.current, total: data.total });
+                        } else if (data.type === 'match') {
+                            setProgress({ current: data.current, total: data.total });
+                            setMatchedStocks((prev) => [...prev, data.stock]);
+                        } else if (data.type === 'complete') {
+                            setProgress({ current: data.total_scanned, total: data.total_scanned });
+                        } else if (data.type === 'error') {
+                            setError(data.message);
+                        }
+                    } catch {
+                        // 忽略单条解析异常
+                    }
+                }
+            };
+
+            let buffer = '';
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-
-                            if (data.type === 'progress') {
-                                setProgress({ current: data.current, total: data.total });
-                            } else if (data.type === 'match') {
-                                setProgress({ current: data.current, total: data.total });
-                                setMatchedStocks((prev) => [...prev, data.stock]);
-                            } else if (data.type === 'complete') {
-                                setProgress({ current: data.total_scanned, total: data.total_scanned });
-                            } else if (data.type === 'error') {
-                                setError(data.message);
-                            }
-                        } catch (e) {
-                            // 忽略解析错误
-                        }
-                    }
+                buffer += decoder.decode(value, { stream: true });
+                const blocks = buffer.split(/\r?\n\r?\n/);
+                buffer = blocks.pop() || '';
+                for (const block of blocks) {
+                    processBlock(block);
                 }
+            }
+            if (buffer.trim()) {
+                processBlock(buffer);
             }
         } catch (err: any) {
             if (err.name !== 'AbortError') {
@@ -425,9 +439,14 @@ export default function StockScreener() {
     useEffect(() => {
         if (!chartModalStock || chartKlineData.length === 0 || !chartContainerRef.current) return;
 
+        let disposed = false;
+        let chart: any = null;
+        let handleResize: (() => void) | null = null;
+
         // 动态导入 ECharts
         import('echarts').then((echarts) => {
-            const chart = echarts.init(chartContainerRef.current!, 'dark');
+            if (disposed || !chartContainerRef.current) return;
+            chart = echarts.init(chartContainerRef.current, 'dark');
 
             const dates = chartKlineData.map((k) => k.date);
             const ohlc = chartKlineData.map((k) => [k.open, k.close, k.low, k.high]);
@@ -478,14 +497,19 @@ export default function StockScreener() {
             });
 
             // 响应窗口变化
-            const handleResize = () => chart.resize();
+            handleResize = () => chart?.resize();
             window.addEventListener('resize', handleResize);
-
-            return () => {
-                window.removeEventListener('resize', handleResize);
-                chart.dispose();
-            };
         });
+
+        return () => {
+            disposed = true;
+            if (handleResize) {
+                window.removeEventListener('resize', handleResize);
+            }
+            if (chart) {
+                chart.dispose();
+            }
+        };
     }, [chartModalStock, chartKlineData]);
 
     // 未登录状态
